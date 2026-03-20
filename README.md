@@ -1,31 +1,31 @@
-# Larson
+# Poet
 
-A monorepo for Larson Air Conditioning's careers website, featuring a dynamic job board integrated with BambooHR and Webflow.
+A monorepo for the Poet careers website, featuring a dynamic job board integrated with BambooHR and Webflow.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Webflow Site                           │
-│              (larson-air-conditioning.webflow.io)           │
+│                  (your-site.webflow.io)                     │
 │                           │                                 │
 │                    <script> tag                             │
 └───────────────────────────┼─────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    larson-client                            │
-│              (CDN-hosted JavaScript)                        │
+│                       client                                │
+│              (CDN-hosted JavaScript)                         │
 │                                                             │
 │  • JobBoardController                                       │
-│  • Featured jobs (4 most recent)                            │
+│  • Featured jobs (4 most recent)                             │
 │  • Department filtering                                     │
 │  • Pagination (5 per page)                                  │
 └───────────────────────────┼─────────────────────────────────┘
                             │ fetch()
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    larson-server                            │
+│                       server                                │
 │                 (Next.js API / Vercel)                      │
 │                                                             │
 │  • /api/jobs endpoint                                       │
@@ -42,10 +42,10 @@ A monorepo for Larson Air Conditioning's careers website, featuring a dynamic jo
 
 ## Packages
 
-| Package                          | Description                       | Tech Stack          |
-| -------------------------------- | --------------------------------- | ------------------- |
-| [larson-client](./larson-client) | Webflow-integrated client library | TypeScript, esbuild |
-| [larson-server](./larson-server) | API server for job data           | Next.js, TypeScript |
+| Package            | Description                       | Tech Stack          |
+| ------------------ | --------------------------------- | ------------------- |
+| [client](./client) | Webflow-integrated client library | TypeScript, esbuild |
+| [server](./server) | API server for job data           | Next.js, TypeScript |
 
 ## Features
 
@@ -62,6 +62,90 @@ A monorepo for Larson Air Conditioning's careers website, featuring a dynamic jo
 - **RESTful Endpoints**: Clean JSON API for job data
 - **CORS Configured**: Supports Webflow and local development
 - **Type-Safe**: Full TypeScript types throughout
+
+## HTML Structure
+
+The job board client uses `dev-role` and `dev-target` attributes to find and populate DOM elements. Place these attributes on your Webflow elements as shown below.
+
+### Required Attributes Reference
+
+| Attribute                           | Element                     | Required |
+| ----------------------------------- | --------------------------- | -------- |
+| `dev-role="job-container"`          | Main job board wrapper      | ✅       |
+| `dev-role="job-filters-wrapper"`    | Filter buttons container    | ✅       |
+| `dev-role="job-pagination-wrapper"` | Pagination controls wrapper | ✅       |
+| `dev-target="job-list"`             | Job cards `<ul>` container  | ✅       |
+| `dev-target="one-job-card"`         | Job card template `<li>`    | ✅       |
+| `dev-role="job-title"`              | Job title heading           | ✅       |
+| `dev-role="job-desc"`               | Job description (location)  | ✅       |
+| `dev-target="job-category"`         | Department pill             | ✅       |
+| `dev-target="job-cta"`              | Apply button `<a>`          | ✅       |
+| `dev-target="job-filter-tag"`       | Filter button template      | ✅       |
+| `dev-target="job-filter-text"`      | Filter button text          | ✅       |
+| `dev-target="btn-prev"`             | Previous page button        | ✅       |
+| `dev-target="btn-next"`             | Next page button            | ✅       |
+| `dev-target="page-btn-template"`    | Page number button template | ✅       |
+
+### Optional (Featured Jobs)
+
+| Attribute                            | Element                        |
+| ------------------------------------ | ------------------------------ |
+| `dev-target="job-list-featured"`     | Featured jobs `<ul>` container |
+| `dev-target="featured-job-card"`     | Featured job card template     |
+| `dev-target="featured-job-title"`    | Featured job title             |
+| `dev-target="featured-job-desc"`     | Featured job location          |
+| `dev-target="featured-job-category"` | Featured job department        |
+| `dev-target="featured-job-cta"`      | Featured job apply button      |
+
+### Complete HTML Structure
+
+```html
+<!-- Main container - REQUIRED -->
+<div dev-role="job-container">
+  <!-- Featured jobs section - OPTIONAL (4 most recent jobs) -->
+  <ul dev-target="job-list-featured" class="wrapper--job-list">
+    <li dev-target="featured-job-card" class="card--job-post">
+      <h3 dev-target="featured-job-title">Job Title</h3>
+      <div dev-target="featured-job-category">Department</div>
+      <p dev-target="featured-job-desc">Location</p>
+      <a dev-target="featured-job-cta" href="#">Apply now</a>
+    </li>
+  </ul>
+
+  <!-- Filter buttons - REQUIRED -->
+  <div dev-role="job-filters-wrapper">
+    <button dev-target="job-filter-tag" class="job-filter is-active">
+      <div dev-target="job-filter-text">View all</div>
+    </button>
+  </div>
+
+  <!-- Main job list - REQUIRED -->
+  <ul dev-target="job-list" class="wrapper--job-list">
+    <li dev-target="one-job-card" class="card--job-post">
+      <h3 dev-role="job-title">Job Title</h3>
+      <div dev-target="job-category">Department</div>
+      <p dev-role="job-desc">Location</p>
+      <a dev-target="job-cta" href="#">Apply now</a>
+    </li>
+  </ul>
+
+  <!-- Pagination - REQUIRED -->
+  <div dev-role="job-pagination-wrapper">
+    <button dev-target="btn-prev">← Previous</button>
+    <div class="wrapper--page-buttons">
+      <button dev-target="page-btn-template">1</button>
+    </div>
+    <button dev-target="btn-next">Next →</button>
+  </div>
+</div>
+```
+
+### Behavior Notes
+
+- **Templates**: `one-job-card`, `featured-job-card`, `job-filter-tag`, and `page-btn-template` are cloned; the first instance is used as the template and its content is replaced.
+- **Classes**: The script toggles `is-active` on filters and page buttons, `is-disabled` on prev/next when at bounds, and `hide` on pagination when jobs ≤ 5.
+- **Page button template**: Must be inside a parent wrapper; the script clears the wrapper and injects page number buttons.
+- **Refresh**: Call `window.refreshJobBoard()` to manually reload jobs from the API.
 
 ## Reference
 
@@ -91,7 +175,7 @@ pnpm install
 
 ### 2. Configure Environment
 
-Create `larson-server/.env`:
+Create `server/.env`:
 
 ```env
 API_KEY=your_bamboohr_api_key
@@ -99,19 +183,23 @@ API_KEY=your_bamboohr_api_key
 
 ### 3. Start Development Servers
 
-**Terminal 1 - API Server:**
+**Option A - Run both client and server:**
 
 ```bash
-cd larson-server
 pnpm dev
-# Runs at http://localhost:8000
+# Client: http://localhost:3000
+# Server: http://localhost:8000
 ```
 
-**Terminal 2 - Client Build:**
+**Option B - Run separately:**
 
 ```bash
-cd larson-client
-pnpm dev
+# Terminal 1 - API Server
+pnpm dev:server
+# Runs at http://localhost:8000
+
+# Terminal 2 - Client
+pnpm dev:frontend
 # Serves at http://localhost:3000
 ```
 
@@ -119,6 +207,14 @@ pnpm dev
 
 ```html
 <script defer src="http://localhost:3000/index.js"></script>
+```
+
+### 5. Dev Mode (Local API)
+
+When developing locally, set `devMode` in localStorage so the client uses the local API:
+
+```javascript
+localStorage.setItem('devMode', 'true');
 ```
 
 ## Included tools
@@ -173,7 +269,7 @@ It is also recommended that you install the following extensions in your VSCode 
 Create environment files for the server:
 
 ```bash
-# larson-server/.env
+# server/.env
 API_KEY=your_bamboohr_api_key
 ```
 
@@ -184,32 +280,30 @@ To run the development servers:
 **Client** (Webflow JavaScript):
 
 ```bash
-cd larson-client
-pnpm dev  # Development server at localhost:3000
+pnpm dev:frontend
+# or: cd client && pnpm dev
+# Development server at localhost:3000
 ```
 
 **Server** (Next.js API):
 
 ```bash
-cd larson-server
-pnpm dev  # API server at localhost:8000
+pnpm dev:server
+# or: cd server && pnpm dev
+# API server at localhost:8000
 ```
 
 ### Production Builds
 
 ```bash
-# Client - outputs to larson-client/dist/
-cd larson-client && pnpm build
+# Client - outputs to client/dist/
+pnpm build:frontend
 
-# Server - outputs to larson-server/.next/
-cd larson-server && pnpm build
-```
+# Server - outputs to server/.next/
+pnpm build:server
 
-**Backend** (Cloudflare Workers):
-
-```bash
-cd packages/server
-pnpm dev  # Local worker with D1 database
+# Or build both
+pnpm build
 ```
 
 ## Testing
@@ -225,7 +319,7 @@ pnpm test:headed       # Run tests with browser UI
 
 Tests are located in:
 
-- `larson-client/tests/` - Client E2E tests
+- `client/tests/` - Client E2E tests
 
 ## Contributing guide
 
@@ -254,7 +348,7 @@ Development workflow:
 | `pnpm changeset`         | Create a new changeset for version tracking |
 | `pnpm changeset version` | Bump versions from changesets               |
 
-**larson-client:**
+**client:**
 
 | Script       | Description                                        |
 | ------------ | -------------------------------------------------- |
@@ -262,7 +356,7 @@ Development workflow:
 | `pnpm build` | Build to `dist/` for production                    |
 | `pnpm check` | TypeScript type checking                           |
 
-**larson-server:**
+**server:**
 
 | Script       | Description                                |
 | ------------ | ------------------------------------------ |
@@ -316,7 +410,7 @@ git push origin v0.0.1
 Update the script tag in Webflow:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/your-org/larson@v0.0.1/larson-client/dist/index.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/your-org/poet@v0.0.1/client/dist/index.js"></script>
 ```
 
 ### Server Deployment

@@ -1,6 +1,6 @@
-# Larson Client
+# Poet Client
 
-A Webflow-integrated client library for Larson Air Conditioning, providing dynamic job board functionality with filtering, pagination, and featured listings.
+A Webflow-integrated client library for Poet, providing dynamic job board functionality with filtering, pagination, and featured listings.
 
 Before starting to work with this template, please take some time to read through the documentation.
 
@@ -31,7 +31,7 @@ Before starting to work with this template, please take some time to read throug
 
 ## Features
 
-- **Dynamic Job Board**: Fetches job listings from BambooHR API via the larson-server
+- **Dynamic Job Board**: Fetches job listings from BambooHR API via the server
 - **Featured Jobs**: Displays 4 most recent job postings sorted by date
 - **Department Filtering**: Dynamic filter buttons for each department with active jobs
 - **Pagination**: 5 jobs per page with prev/next navigation
@@ -51,6 +51,50 @@ The job board (`JobBoardController`) is a fully client-side system that integrat
 ### DOM Attributes Reference
 
 All DOM manipulation relies exclusively on `dev-target` and `dev-role` attributes. If any required attribute is missing, the controller logs an error and exits gracefully.
+
+### Complete HTML Structure
+
+All required and optional elements in one block:
+
+```html
+<div dev-role="job-container">
+  <!-- Featured jobs (optional) -->
+  <ul dev-target="job-list-featured" class="wrapper--job-list">
+    <li dev-target="featured-job-card" class="card--job-post">
+      <h3 dev-target="featured-job-title">Job Title</h3>
+      <div dev-target="featured-job-category">Department</div>
+      <p dev-target="featured-job-desc">Location</p>
+      <a dev-target="featured-job-cta" href="#">Apply now</a>
+    </li>
+  </ul>
+
+  <!-- Filters (required) -->
+  <div dev-role="job-filters-wrapper">
+    <button dev-target="job-filter-tag" class="job-filter is-active">
+      <div dev-target="job-filter-text">View all</div>
+    </button>
+  </div>
+
+  <!-- Job list (required) -->
+  <ul dev-target="job-list" class="wrapper--job-list">
+    <li dev-target="one-job-card" class="card--job-post">
+      <h3 dev-role="job-title">Job Title</h3>
+      <div dev-target="job-category">Department</div>
+      <p dev-role="job-desc">Location</p>
+      <a dev-target="job-cta" href="#">Apply now</a>
+    </li>
+  </ul>
+
+  <!-- Pagination (required) -->
+  <div dev-role="job-pagination-wrapper">
+    <button dev-target="btn-prev">← Previous</button>
+    <div class="wrapper--page-buttons">
+      <button dev-target="page-btn-template">1</button>
+    </div>
+    <button dev-target="btn-next">Next →</button>
+  </div>
+</div>
+```
 
 #### Container Elements
 
@@ -178,6 +222,9 @@ Filters are dynamically generated based on departments that have at least one ac
 ```javascript
 // Manually refresh jobs from API
 window.refreshJobBoard();
+
+// Use local API (localhost:8000) instead of production
+localStorage.setItem('devMode', 'true');
 ```
 
 ## Included tools
@@ -398,6 +445,6 @@ To create and publish a new version:
 
 4. **Update Webflow script tag** - Use the new version in your Webflow project
    ```html
-   <script src="https://cdn.jsdelivr.net/gh/BX-Studio-Webflow/mega-menu-animation@v0.0.1/dist/index.js"></script>
+   <script src="https://cdn.jsdelivr.net/gh/your-org/poet@v0.0.1/client/dist/index.js"></script>
    ```
    Update the version number in the `@v0.0.1` part of the URL to match your release

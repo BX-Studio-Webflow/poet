@@ -1,6 +1,6 @@
-# Larson Server
+# Poet Server
 
-A Next.js API server for Larson Air Conditioning that integrates with BambooHR's Applicant Tracking System to provide job listings data.
+A Next.js API server for Poet that integrates with BambooHR's Applicant Tracking System to provide job listings data.
 
 ## Reference
 

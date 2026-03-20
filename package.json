@@ -1,7 +1,7 @@
 {
-  "name": "@bx/larson",
+  "name": "@bx/poet",
   "version": "0.0.0",
-  "description": "Monorepo for the larson project.",
+  "description": "Monorepo for the Poet project.",
   "homepage": "https://github.com/finsweet/developer-starter#readme",
   "license": "ISC",
   "keywords": [],
