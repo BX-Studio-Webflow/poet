@@ -1,6 +1,6 @@
 # Poet
 
-A monorepo for the Poet careers website, featuring a dynamic job board integrated with BambooHR and Webflow.
+A monorepo for the Poet careers website, featuring a dynamic job board integrated with Workday Recruiting and Webflow.
 
 ## Architecture Overview
 
@@ -35,8 +35,8 @@ A monorepo for the Poet careers website, featuring a dynamic job board integrate
                             │ Basic Auth
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      BambooHR API                           │
-│          (Applicant Tracking System)                        │
+│                      Workday Recruiting                     │
+│          (OAuth 2.0 / Job Postings API)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,7 +51,7 @@ A monorepo for the Poet careers website, featuring a dynamic job board integrate
 
 ### Job Board
 
-- **BambooHR Integration**: Real-time job listings from BambooHR ATS
+- **Workday Integration**: Job postings from Workday Recruiting v4 API (OAuth 2.0)
 - **Featured Jobs**: 4 most recent postings displayed prominently
 - **Department Filtering**: Dynamic filters based on active departments
 - **Pagination**: 5 jobs per page with navigation controls
@@ -175,10 +175,14 @@ pnpm install
 
 ### 2. Configure Environment
 
-Create `server/.env`:
+Copy `server/.env.example` to `server/.env` and add your Workday credentials:
 
 ```env
-API_KEY=your_bamboohr_api_key
+WORKDAY_BASE_URL=https://wd2-impl-services1.workday.com/ccx
+WORKDAY_TENANT=poet_preview
+WORKDAY_CLIENT_ID=your_client_id
+WORKDAY_CLIENT_SECRET=your_client_secret
+WORKDAY_REFRESH_TOKEN=your_refresh_token
 ```
 
 ### 3. Start Development Servers
@@ -241,7 +245,7 @@ This project requires:
 npm i -g pnpm
 ```
 
-- [BambooHR API Key](https://documentation.bamboohr.com/docs/getting-started) - For job listings
+- [Workday API Client](https://community.workday.com/) - OAuth credentials for Recruiting API
 
 ## Getting started
 
@@ -269,8 +273,7 @@ It is also recommended that you install the following extensions in your VSCode 
 Create environment files for the server:
 
 ```bash
-# server/.env
-API_KEY=your_bamboohr_api_key
+# server/.env - see server/.env.example for required Workday variables
 ```
 
 ### Building
@@ -417,7 +420,7 @@ Update the script tag in Webflow:
 
 The server auto-deploys to Vercel on push to `main`. Ensure environment variables are set in Vercel dashboard:
 
-- `API_KEY` - BambooHR API key
+- `WORKDAY_BASE_URL`, `WORKDAY_TENANT`, `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_REFRESH_TOKEN`
 
 #### Enabling Changesets Permissions
 

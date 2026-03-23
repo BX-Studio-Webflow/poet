@@ -1,41 +1,76 @@
 /**
  * Job Board Controller
  * Handles fetching, filtering, and pagination of job listings
+ * Works with raw Workday API response ({ data: [...], total? })
  */
 
-// Types
-interface Job {
-  id: number;
+/** Workday job posting shape - matches API response */
+interface WorkdayJob {
+  id: string;
   title: string;
-  postedDate: string;
-  location: {
-    city: string;
-    state: string;
-    label: string;
-    address: {
-      line1: string;
-      line2: string | null;
-      city: string;
-      state: string;
-      zipcode: string;
-      country: string;
-    };
+  url: string;
+  startDate: string;
+  jobDescription?: string;
+  jobType?: { id: string; descriptor: string };
+  jobSite?: { id: string; descriptor: string };
+  primaryLocation?: {
+    id: string;
+    descriptor: string;
+    country?: { descriptor: string; alpha3Code: string };
+    region?: { descriptor: string; code: string };
   };
-  department: string;
-  status: {
-    id: number;
-    label: string;
-  };
-  hiringLead: {
-    name: string;
-    avatar: string;
-  };
-  applicants: {
-    new: number;
-    active: number;
-    total: number;
-  };
-  postingUrl: string;
+  categories?: { id: string; descriptor: string }[];
+  company?: { id: string; descriptor: string };
+  timeType?: { id: string; descriptor: string };
+  spotlightJob?: boolean;
+}
+
+type Job = WorkdayJob | Record<string, unknown>;
+
+function getTitle(job: Job): string {
+  const v = job.title ?? job.jobPostingTitle ?? job.descriptor;
+  return String(v ?? '');
+}
+
+function getLocationLabel(job: Job): string {
+  const primary = job.primaryLocation as { descriptor?: string } | undefined;
+  const v =
+    primary?.descriptor ??
+    job.locationsText ??
+    job.locations_text ??
+    (job.location as Record<string, unknown>)?.label;
+  return String(v ?? '');
+}
+
+function getDepartment(job: Job): string {
+  const cats = job.categories as { descriptor?: string }[] | undefined;
+  const v =
+    (Array.isArray(cats) && cats[0]?.descriptor) ??
+    job.department ??
+    (job.jobFamilyReference as { descriptor?: string })?.descriptor ??
+    (job.supervisoryOrganizationReference as { descriptor?: string })?.descriptor;
+  return String(v ?? 'General');
+}
+
+function getPostingUrl(job: Job): string {
+  const v =
+    job.url ??
+    job.externalApplyUrl ??
+    job.externalApplyURL ??
+    job.postingUrl ??
+    job.applyUrl;
+  if (typeof v === 'string' && v.startsWith('http')) return v;
+  const path = job.externalPath ?? job.externalJobPath;
+  if (typeof path === 'string' && path) {
+    return path.startsWith('/') ? path : `/${path}`;
+  }
+  return '#';
+}
+
+function getDate(job: Job): Date {
+  const v = job.startDate ?? job.postedDate ?? job.jobPostingStartDate ?? job.createdAt;
+  if (typeof v === 'string') return new Date(v);
+  return new Date();
 }
 
 // Constants
@@ -192,7 +227,7 @@ export class JobBoardController {
   }
 
   /**
-   * Load jobs from API
+   * Load jobs from API (raw Workday response: { data: [...], total? })
    */
   private async loadJobs(): Promise<void> {
     try {
@@ -200,7 +235,16 @@ export class JobBoardController {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      this.jobs = await response.json();
+      const raw = await response.json();
+
+      // Extract job array: Workday returns { data, total } or array
+      this.jobs = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : Array.isArray(raw?.jobPostings)
+            ? raw.jobPostings
+            : [];
     } catch (error) {
       console.error('[JobBoard] Failed to fetch jobs:', error);
       return;
@@ -221,37 +265,26 @@ export class JobBoardController {
     // Clear existing featured jobs
     this.featuredJobList.innerHTML = '';
 
-    // Sort jobs by postedDate (most recent first) and take top 4
+    // Sort jobs by date (most recent first) and take top 4
     const featuredJobs = [...this.jobs]
-      .sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
+      .sort((a, b) => getDate(b).getTime() - getDate(a).getTime())
       .slice(0, FEATURED_JOBS_COUNT);
 
-    // Render each featured job
     featuredJobs.forEach((job) => {
       const card = this.featuredJobCardTemplate!.cloneNode(true) as HTMLElement;
 
-      // Job title
       const titleEl = card.querySelector(SELECTORS.featuredJobTitle);
-      if (titleEl) {
-        titleEl.textContent = job.title;
-      }
+      if (titleEl) titleEl.textContent = getTitle(job);
 
-      // Job description (location.label)
       const descEl = card.querySelector(SELECTORS.featuredJobDesc);
-      if (descEl) {
-        descEl.textContent = job.location.label;
-      }
+      if (descEl) descEl.textContent = getLocationLabel(job);
 
-      // Job category (department)
       const categoryEl = card.querySelector(SELECTORS.featuredJobCategory);
-      if (categoryEl) {
-        categoryEl.textContent = job.department;
-      }
+      if (categoryEl) categoryEl.textContent = getDepartment(job);
 
-      // Job CTA
       const ctaEl = card.querySelector(SELECTORS.featuredJobCta) as HTMLAnchorElement | null;
       if (ctaEl) {
-        ctaEl.href = job.postingUrl;
+        ctaEl.href = getPostingUrl(job);
         ctaEl.target = '_blank';
         ctaEl.rel = 'noopener noreferrer';
       }
@@ -266,9 +299,8 @@ export class JobBoardController {
   private extractDepartments(): void {
     const deptSet = new Set<string>();
     this.jobs.forEach((job) => {
-      if (job.department) {
-        deptSet.add(job.department);
-      }
+      const dept = getDepartment(job);
+      if (dept) deptSet.add(dept);
     });
     this.departments = Array.from(deptSet).sort();
   }
@@ -327,7 +359,7 @@ export class JobBoardController {
     if (department === null) {
       this.filteredJobs = [...this.jobs];
     } else {
-      this.filteredJobs = this.jobs.filter((job) => job.department === department);
+      this.filteredJobs = this.jobs.filter((job) => getDepartment(job) === department);
     }
 
     this.renderJobs();
@@ -348,32 +380,21 @@ export class JobBoardController {
     const endIndex = startIndex + JOBS_PER_PAGE;
     const pageJobs = this.filteredJobs.slice(startIndex, endIndex);
 
-    // Render each job
     pageJobs.forEach((job) => {
       const card = this.jobCardTemplate!.cloneNode(true) as HTMLElement;
 
-      // Job title
       const titleEl = card.querySelector(SELECTORS.jobTitle);
-      if (titleEl) {
-        titleEl.textContent = job.title;
-      }
+      if (titleEl) titleEl.textContent = getTitle(job);
 
-      // Job description (location.label)
       const descEl = card.querySelector(SELECTORS.jobDesc);
-      if (descEl) {
-        descEl.textContent = job.location.label;
-      }
+      if (descEl) descEl.textContent = getLocationLabel(job);
 
-      // Job category (department)
       const categoryEl = card.querySelector(SELECTORS.jobCategory);
-      if (categoryEl) {
-        categoryEl.textContent = job.department;
-      }
+      if (categoryEl) categoryEl.textContent = getDepartment(job);
 
-      // Job CTA
       const ctaEl = card.querySelector(SELECTORS.jobCta) as HTMLAnchorElement | null;
       if (ctaEl) {
-        ctaEl.href = job.postingUrl;
+        ctaEl.href = getPostingUrl(job);
         ctaEl.target = '_blank';
         ctaEl.rel = 'noopener noreferrer';
       }
