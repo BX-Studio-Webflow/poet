@@ -65,9 +65,20 @@ export async function getWorkdayAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+const JOB_POSTINGS_PAGE_SIZE = 100;
+/** Guard if offset is ignored and the same page repeats */
+const MAX_JOB_POSTING_PAGES = 100;
+
+interface WorkdayJobPostingsPage {
+  total?: number;
+  data?: unknown[];
+  hasMore?: boolean;
+}
+
 /**
- * Fetch job postings from Workday Recruiting v4 API
- * Returns the raw API response (pass-through to frontend)
+ * Fetch job postings from Workday Recruiting v4 API.
+ * Workday returns `total` for all matches but only one page in `data` unless
+ * you paginate with limit/offset (see REST collection pattern).
  */
 export async function fetchWorkdayJobPostings(accessToken: string): Promise<unknown> {
   const baseUrl = process.env.WORKDAY_BASE_URL;
@@ -77,19 +88,72 @@ export async function fetchWorkdayJobPostings(accessToken: string): Promise<unkn
     throw new Error('Missing WORKDAY_BASE_URL or WORKDAY_TENANT');
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}/api/recruiting/v4/${tenant}/jobPostings`;
+  const base = `${baseUrl.replace(/\/$/, '')}/api/recruiting/v4/${tenant}/jobPostings`;
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  const allData: unknown[] = [];
+  let total: number | undefined;
+  let offset = 0;
+  let previousFirstId: string | undefined;
+  let page = 0;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Workday jobPostings error ${response.status}: ${text}`);
+  while (page < MAX_JOB_POSTING_PAGES) {
+    const url = new URL(base);
+    url.searchParams.set('limit', String(JOB_POSTINGS_PAGE_SIZE));
+    url.searchParams.set('offset', String(offset));
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Workday jobPostings error ${response.status}: ${text}`);
+    }
+
+    const body = (await response.json()) as WorkdayJobPostingsPage;
+    const batch = Array.isArray(body.data) ? body.data : [];
+
+    if (typeof body.total === 'number') {
+      total = body.total;
+    }
+
+    if (batch.length === 0) {
+      break;
+    }
+
+    const firstId =
+      batch[0] && typeof batch[0] === 'object' && batch[0] !== null && 'id' in batch[0]
+        ? String((batch[0] as { id: unknown }).id)
+        : undefined;
+    if (offset > 0 && firstId !== undefined && firstId === previousFirstId) {
+      console.warn(
+        '[Workday] jobPostings pagination: offset appears ignored; returning first page only. Check API query params.'
+      );
+      break;
+    }
+    previousFirstId = firstId;
+
+    allData.push(...batch);
+    page += 1;
+
+    if (body.hasMore === false) {
+      break;
+    }
+    if (total !== undefined && allData.length >= total) {
+      break;
+    }
+    if (batch.length < JOB_POSTINGS_PAGE_SIZE) {
+      break;
+    }
+
+    offset += JOB_POSTINGS_PAGE_SIZE;
   }
 
-  return response.json();
+  return {
+    total: total ?? allData.length,
+    data: allData,
+  };
 }
