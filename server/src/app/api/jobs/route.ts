@@ -2,10 +2,8 @@ import { fetchWorkdayJobPostings, getWorkdayAccessToken } from '@/lib/workday';
 import { unstable_cache } from 'next/cache';
 import { NextResponse } from 'next/server';
 
-/** 12 hours — Data Cache + route segment (no per-request Workday calls until stale) */
-const REVALIDATE_SECONDS = 12 * 60 * 60;
-
-export const revalidate = REVALIDATE_SECONDS;
+/** 12 hours */
+const REVALIDATE_SECONDS = 43_200;
 
 const getCachedJobPostings = unstable_cache(
   async () => {

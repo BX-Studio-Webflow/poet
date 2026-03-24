@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 8000 --turbopack",
     "check": "tsc --noEmit",
+    "lint:fix": "eslint --fix",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"

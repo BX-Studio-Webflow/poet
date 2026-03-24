@@ -28,7 +28,7 @@
     "deploy:frontend": "pnpm --filter ./client run deploy",
     "lint": "concurrently \"pnpm -r lint\" \"prettier --check . --ignore-path .prettierignore\"",
     "lint:fix": "concurrently \"pnpm -r lint:fix\" \"prettier --write . --ignore-path .prettierignore\"",
-    "check": "pnpm --filter ./client check && pnpm --filter ./server check && tsc --noEmit",
+    "check": "pnpm --filter ./client check && pnpm --filter ./server check",
     "format": "prettier --write .",
     "test": "playwright test --config=client/playwright.config.ts",
     "test:ui": "playwright test --ui --config=client/playwright.config.ts",
