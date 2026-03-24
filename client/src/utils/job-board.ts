@@ -108,7 +108,7 @@ function filterJobs(jobs: Job[], location: string, category: string, title: stri
 const devMode = localStorage.getItem('api-mode') === 'local';
 const API_ENDPOINT = devMode
   ? 'http://localhost:8000/api/jobs'
-  : 'https://larson-server.vercel.app/api/jobs';
+  : 'https://poet-server.vercel.app/api/jobs';
 
 const SELECTORS = {
   root: '.careers-list_list_wrap',
