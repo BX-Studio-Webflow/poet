@@ -105,6 +105,46 @@ function filterJobs(jobs: Job[], location: string, category: string, title: stri
   );
 }
 
+export type CareersListMode = 'all' | 'cities' | 'interns';
+
+/** `city="alexandria-in"` → slug `alexandria`, state `IN` */
+export function parseCityAttribute(value: string): { citySlug: string; stateCode: string } | null {
+  const v = value.trim().toLowerCase();
+  if (!v) return null;
+  const last = v.lastIndexOf('-');
+  if (last <= 0) return null;
+  const maybeState = v.slice(last + 1);
+  if (maybeState.length !== 2 || !/^[a-z]{2}$/.test(maybeState)) return null;
+  return { citySlug: v.slice(0, last), stateCode: maybeState.toUpperCase() };
+}
+
+function normalizeLocationCitySlug(descriptor: string): string {
+  const beforeComma = descriptor.split(',')[0]?.trim() ?? '';
+  return beforeComma
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function matchesCityPage(job: Job, parsed: { citySlug: string; stateCode: string }): boolean {
+  const code = job.primaryLocation?.region?.code?.toUpperCase();
+  if (code !== parsed.stateCode) return false;
+  const slug = normalizeLocationCitySlug(getLocationLabel(job));
+  return slug === parsed.citySlug;
+}
+
+function isInternJob(job: Job): boolean {
+  const title = getTitle(job).toLowerCase();
+  const jt = job.jobType?.descriptor?.toLowerCase() ?? '';
+  return title.includes('intern') || jt.includes('intern');
+}
+
+function normalizeListMode(raw: string | null): CareersListMode {
+  const m = (raw ?? 'all').trim().toLowerCase();
+  if (m === 'cities' || m === 'interns') return m;
+  return 'all';
+}
+
 const devMode = localStorage.getItem('api-mode') === 'local';
 const API_ENDPOINT = devMode
   ? 'http://localhost:8000/api/jobs'
@@ -188,6 +228,8 @@ export class JobBoardController {
   private root: HTMLElement | null = null;
   private jobList: HTMLElement | null = null;
   private filterForm: HTMLFormElement | null = null;
+  private listMode: CareersListMode = 'all';
+  private cityParsed: { citySlug: string; stateCode: string } | null = null;
 
   async init(): Promise<void> {
     this.root = document.querySelector(SELECTORS.root);
@@ -211,13 +253,29 @@ export class JobBoardController {
     this.itemTemplate = templateItem.cloneNode(true) as HTMLElement;
     this.filterForm = this.root.querySelector(SELECTORS.filtersForm);
 
+    this.listMode = normalizeListMode(this.jobList.getAttribute('mode'));
+    const cityAttr = this.jobList.getAttribute('city') ?? '';
+    this.cityParsed = this.listMode === 'cities' ? parseCityAttribute(cityAttr) : null;
+    if (this.listMode === 'cities' && !this.cityParsed) {
+      console.error(
+        '[JobBoard] mode="cities" requires city="{city-slug}-{st}" (e.g. alexandria-in); got:',
+        cityAttr || '(empty)'
+      );
+    }
+
     await this.loadJobs();
 
     this.bindFilters();
     this.renderFiltered();
 
     window.dispatchEvent(
-      new CustomEvent('jobboard:rendered', { detail: { count: this.jobs.length } })
+      new CustomEvent('jobboard:rendered', {
+        detail: {
+          count: this.jobs.length,
+          mode: this.listMode,
+          city: this.cityParsed,
+        },
+      })
     );
   }
 
@@ -246,11 +304,23 @@ export class JobBoardController {
     }
   }
 
+  private jobsAfterMode(): Job[] {
+    if (this.listMode === 'cities') {
+      if (!this.cityParsed) return [];
+      return this.jobs.filter((j) => matchesCityPage(j, this.cityParsed!));
+    }
+    if (this.listMode === 'interns') {
+      return this.jobs.filter(isInternJob);
+    }
+    return this.jobs;
+  }
+
   private renderFiltered(): void {
     if (!this.jobList || !this.itemTemplate) return;
 
     const { location, category, title } = this.readFilterInputs();
-    const visible = filterJobs(this.jobs, location, category, title);
+    const pool = this.jobsAfterMode();
+    const visible = filterJobs(pool, location, category, title);
 
     this.jobList.innerHTML = '';
 
@@ -262,7 +332,16 @@ export class JobBoardController {
 
     window.dispatchEvent(
       new CustomEvent('jobboard:filtered', {
-        detail: { total: this.jobs.length, visible: visible.length, location, category, title },
+        detail: {
+          total: this.jobs.length,
+          pool: pool.length,
+          visible: visible.length,
+          location,
+          category,
+          title,
+          mode: this.listMode,
+          city: this.cityParsed,
+        },
       })
     );
   }
@@ -295,7 +374,13 @@ export class JobBoardController {
     this.renderFiltered();
 
     window.dispatchEvent(
-      new CustomEvent('jobboard:rendered', { detail: { count: this.jobs.length } })
+      new CustomEvent('jobboard:rendered', {
+        detail: {
+          count: this.jobs.length,
+          mode: this.listMode,
+          city: this.cityParsed,
+        },
+      })
     );
   }
 }
