@@ -45,7 +45,14 @@ GET /api/jobs
       "city": "",
       "state": "",
       "label": "San Francisco, CA",
-      "address": { "line1": "", "line2": null, "city": "", "state": "", "zipcode": "", "country": "" }
+      "address": {
+        "line1": "",
+        "line2": null,
+        "city": "",
+        "state": "",
+        "zipcode": "",
+        "country": ""
+      }
     },
     "department": "Engineering",
     "status": { "id": 1, "label": "Open" },
@@ -82,8 +89,8 @@ const acceptedOrigins = [
   'http://localhost:3000',
   'http://localhost:8000',
   'https://larson-air-conditioning.webflow.io',
-  'https://chaloner.com',
-  'https://www.chaloner.com',
+  'https://poet.com',
+  'https://www.poet.com',
 ];
 ```
 
@@ -97,13 +104,13 @@ Copy `.env.example` to `.env` and fill in your Workday credentials:
 cp .env.example .env
 ```
 
-| Variable                 | Description                          | Required |
-| ------------------------ | ------------------------------------ | -------- |
-| `WORKDAY_BASE_URL`       | Workday API base (e.g. `https://wd2-impl-services1.workday.com/ccx`) | ✅       |
-| `WORKDAY_TENANT`         | Tenant name (e.g. `poet_preview`)    | ✅       |
-| `WORKDAY_CLIENT_ID`      | OAuth client ID                      | ✅       |
-| `WORKDAY_CLIENT_SECRET`   | OAuth client secret                   | ✅       |
-| `WORKDAY_REFRESH_TOKEN`   | OAuth refresh token                  | ✅       |
+| Variable                | Description                                                          | Required |
+| ----------------------- | -------------------------------------------------------------------- | -------- |
+| `WORKDAY_BASE_URL`      | Workday API base (e.g. `https://wd2-impl-services1.workday.com/ccx`) | ✅       |
+| `WORKDAY_TENANT`        | Tenant name (e.g. `poet_preview`)                                    | ✅       |
+| `WORKDAY_CLIENT_ID`     | OAuth client ID                                                      | ✅       |
+| `WORKDAY_CLIENT_SECRET` | OAuth client secret                                                  | ✅       |
+| `WORKDAY_REFRESH_TOKEN` | OAuth refresh token                                                  | ✅       |
 
 ## Getting Started
 

@@ -1,10 +1,8 @@
 /**
- * Job Board Controller
- * Handles fetching, filtering, and pagination of job listings
- * Works with raw Workday API response ({ data: [...], total? })
+ * Careers job board: fetch once, filter in memory, re-render list from a template.
+ * Wires to the existing filter UI (native select + search input inside the form).
  */
 
-/** Workday job posting shape - matches API response */
 interface WorkdayJob {
   id: string;
   title: string;
@@ -25,210 +23,250 @@ interface WorkdayJob {
   spotlightJob?: boolean;
 }
 
-type Job = WorkdayJob | Record<string, unknown>;
+type Job = WorkdayJob & Record<string, unknown>;
 
 function getTitle(job: Job): string {
-  const v = job.title ?? job.jobPostingTitle ?? job.descriptor;
+  const v = job.title ?? (job as Record<string, unknown>).jobPostingTitle ?? job.descriptor;
   return String(v ?? '');
 }
 
 function getLocationLabel(job: Job): string {
-  const primary = job.primaryLocation as { descriptor?: string } | undefined;
+  const primary = job.primaryLocation;
+  const loc = job as Record<string, unknown>;
   const v =
     primary?.descriptor ??
-    job.locationsText ??
-    job.locations_text ??
-    (job.location as Record<string, unknown>)?.label;
+    loc.locationsText ??
+    loc.locations_text ??
+    (loc.location as { label?: string } | undefined)?.label;
   return String(v ?? '');
 }
 
-function getDepartment(job: Job): string {
-  const cats = job.categories as { descriptor?: string }[] | undefined;
+function getCategory(job: Job): string {
+  const cats = job.categories;
+  const loc = job as Record<string, unknown>;
   const v =
     (Array.isArray(cats) && cats[0]?.descriptor) ??
-    job.department ??
-    (job.jobFamilyReference as { descriptor?: string })?.descriptor ??
-    (job.supervisoryOrganizationReference as { descriptor?: string })?.descriptor;
+    loc.department ??
+    (loc.jobFamilyReference as { descriptor?: string })?.descriptor ??
+    (loc.supervisoryOrganizationReference as { descriptor?: string })?.descriptor;
   return String(v ?? 'General');
 }
 
 function getPostingUrl(job: Job): string {
+  const loc = job as Record<string, unknown>;
   const v =
-    job.url ??
-    job.externalApplyUrl ??
-    job.externalApplyURL ??
-    job.postingUrl ??
-    job.applyUrl;
+    job.url ?? loc.externalApplyUrl ?? loc.externalApplyURL ?? loc.postingUrl ?? loc.applyUrl;
   if (typeof v === 'string' && v.startsWith('http')) return v;
-  const path = job.externalPath ?? job.externalJobPath;
+  const path = loc.externalPath ?? loc.externalJobPath;
   if (typeof path === 'string' && path) {
     return path.startsWith('/') ? path : `/${path}`;
   }
   return '#';
 }
 
-function getDate(job: Job): Date {
-  const v = job.startDate ?? job.postedDate ?? job.jobPostingStartDate ?? job.createdAt;
-  if (typeof v === 'string') return new Date(v);
-  return new Date();
+function getTimeType(job: Job): string {
+  return job.timeType?.descriptor ?? '';
 }
 
-// Constants
-const JOBS_PER_PAGE = 5;
-const devMode = localStorage.getItem('devMode') === 'true';
+function getSecondaryLine(job: Job): string {
+  const company = job.company?.descriptor?.trim();
+  if (company) return company;
+  return job.jobType?.descriptor ?? '';
+}
+
+function matchesLocation(job: Job, filter: string): boolean {
+  const f = filter.trim().toLowerCase();
+  if (!f) return true;
+  const loc = getLocationLabel(job).toLowerCase();
+  if (loc === f) return true;
+  if (loc.startsWith(f + ',')) return true;
+  if (f.includes(',') && loc === f) return true;
+  return loc.includes(f);
+}
+
+function matchesCategory(job: Job, filter: string): boolean {
+  const f = filter.trim().toLowerCase();
+  if (!f) return true;
+  return getCategory(job).toLowerCase() === f;
+}
+
+function matchesTitleSearch(job: Job, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return getTitle(job).toLowerCase().includes(q);
+}
+
+function filterJobs(jobs: Job[], location: string, category: string, title: string): Job[] {
+  return jobs.filter(
+    (job) =>
+      matchesLocation(job, location) &&
+      matchesCategory(job, category) &&
+      matchesTitleSearch(job, title)
+  );
+}
+
+const devMode = localStorage.getItem('api-mode') === 'local';
 const API_ENDPOINT = devMode
   ? 'http://localhost:8000/api/jobs'
   : 'https://larson-server.vercel.app/api/jobs';
 
-// Constants
-const FEATURED_JOBS_COUNT = 4;
-
-// Dev-target selectors
 const SELECTORS = {
-  container: '[dev-role="job-container"]',
-  filtersWrapper: '[dev-role="job-filters-wrapper"]',
-  filterTag: '[dev-target="job-filter-tag"]',
-  filterText: '[dev-target="job-filter-text"]',
-  jobList: '[dev-target="job-list"]',
-  jobCard: '[dev-target="one-job-card"]',
-  jobTitle: '[dev-role="job-title"]',
-  jobDesc: '[dev-role="job-desc"]',
-  jobCategory: '[dev-target="job-category"]',
-  jobCta: '[dev-target="job-cta"]',
-  paginationWrapper: '[dev-role="job-pagination-wrapper"]',
-  btnPrev: '[dev-target="btn-prev"]',
-  btnNext: '[dev-target="btn-next"]',
-  pageBtnTemplate: '[dev-target="page-btn-template"]',
-  // Featured jobs selectors
-  featuredJobList: '[dev-target="job-list-featured"]',
-  featuredJobCard: '[dev-target="featured-job-card"]',
-  featuredJobTitle: '[dev-target="featured-job-title"]',
-  featuredJobDesc: '[dev-target="featured-job-desc"]',
-  featuredJobCategory: '[dev-target="featured-job-category"]',
-  featuredJobCta: '[dev-target="featured-job-cta"]',
+  root: '.careers-list_list_wrap',
+  filtersForm: 'form.careers-list_filters_form',
+  filterLocation: 'select[fs-list-field="location"]',
+  filterCategory: 'select[fs-list-field="category"]',
+  filterTitle: 'input[fs-list-field="title"]',
+  list: '.careers-list_list',
+  item: '.careers-list_item',
+  cardTitle: '[fs-list-field="title"], .career-card_heading_text',
+  location: '[fs-list-field="location"]',
+  category: '[fs-list-field="category"], [fs-list-field="job-category"]',
+  secondaryText: '.career-card_text',
+  detailLabels: '.career-card_detail_wrap .career-card_detail_label',
+  applyAnchor: '.career-card_details_button a',
+  clickableBtn: '.clickable_btn',
+  clickableSrText: '.clickable_text',
 } as const;
+
+function populateCareerItem(item: HTMLElement, job: Job): void {
+  const title = getTitle(job);
+  const location = getLocationLabel(job);
+  const category = getCategory(job);
+  const url = getPostingUrl(job);
+  const timeType = getTimeType(job);
+  const secondary = getSecondaryLine(job);
+
+  const titleEl = item.querySelector(SELECTORS.cardTitle);
+  if (titleEl) titleEl.textContent = title;
+
+  const sub = item.querySelector(SELECTORS.secondaryText);
+  if (sub) sub.textContent = secondary;
+
+  const locEl = item.querySelector(SELECTORS.location);
+  if (locEl) locEl.textContent = location;
+
+  const labels = item.querySelectorAll(SELECTORS.detailLabels);
+  if (labels.length >= 2) {
+    (labels[1] as HTMLElement).textContent = timeType || '—';
+  }
+
+  item.querySelectorAll(SELECTORS.category).forEach((el) => {
+    el.textContent = category;
+  });
+
+  const applyLink = item.querySelector(SELECTORS.applyAnchor) as HTMLAnchorElement | null;
+  if (applyLink) {
+    applyLink.href = url;
+    applyLink.target = '_blank';
+    applyLink.rel = 'noopener noreferrer';
+  }
+
+  const sr = item.querySelector(SELECTORS.clickableSrText);
+  if (sr) sr.textContent = title;
+
+  const btn = item.querySelector(SELECTORS.clickableBtn);
+  if (btn && url.startsWith('http')) {
+    const open = (e: Event) => {
+      e.preventDefault();
+      window.open(url, '_blank', 'noopener,noreferrer');
+    };
+    btn.addEventListener('click', open);
+  }
+}
+
+function debounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: number): T {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return ((...args: Parameters<T>) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
 
 export class JobBoardController {
   private jobs: Job[] = [];
-  private filteredJobs: Job[] = [];
-  private currentPage = 1;
-  private currentFilter: string | null = null;
-  private departments: string[] = [];
-
-  // DOM Elements
-  private container: HTMLElement | null = null;
-  private filtersWrapper: HTMLElement | null = null;
-  private filterTemplate: HTMLElement | null = null;
+  private itemTemplate: HTMLElement | null = null;
+  private root: HTMLElement | null = null;
   private jobList: HTMLElement | null = null;
-  private jobCardTemplate: HTMLElement | null = null;
-  private paginationWrapper: HTMLElement | null = null;
-  private btnPrev: HTMLButtonElement | null = null;
-  private btnNext: HTMLButtonElement | null = null;
-  private pageBtnTemplate: HTMLButtonElement | null = null;
-  private pageBtnWrapper: HTMLElement | null = null;
+  private filterForm: HTMLFormElement | null = null;
 
-  // Featured jobs DOM elements (optional - may not exist on all pages)
-  private featuredJobList: HTMLElement | null = null;
-  private featuredJobCardTemplate: HTMLElement | null = null;
-
-  /**
-   * Initialize the job board
-   */
   async init(): Promise<void> {
-    if (!this.queryElements()) {
+    this.root = document.querySelector(SELECTORS.root);
+    if (!this.root) {
+      console.error('[JobBoard] Missing .careers-list_list_wrap');
       return;
     }
 
-    this.bindEvents();
-    await this.loadJobs();
-  }
-
-  /**
-   * Query and validate all required DOM elements
-   */
-  private queryElements(): boolean {
-    this.container = document.querySelector(SELECTORS.container);
-    if (!this.container) {
-      console.error('[JobBoard] Missing required attribute: dev-role="job-container"');
-      return false;
-    }
-
-    this.filtersWrapper = document.querySelector(SELECTORS.filtersWrapper);
-    if (!this.filtersWrapper) {
-      console.error('[JobBoard] Missing required attribute: dev-role="job-filters-wrapper"');
-      return false;
-    }
-
-    this.filterTemplate = document.querySelector(SELECTORS.filterTag);
-    if (!this.filterTemplate) {
-      console.error('[JobBoard] Missing required attribute: dev-target="job-filter-tag"');
-      return false;
-    }
-
-    this.jobList = document.querySelector(SELECTORS.jobList);
+    this.jobList = this.root.querySelector(SELECTORS.list);
     if (!this.jobList) {
-      console.error('[JobBoard] Missing required attribute: dev-target="job-list"');
-      return false;
+      console.error('[JobBoard] Missing .careers-list_list');
+      return;
     }
 
-    this.jobCardTemplate = document.querySelector(SELECTORS.jobCard);
-    if (!this.jobCardTemplate) {
-      console.error('[JobBoard] Missing required attribute: dev-target="one-job-card"');
-      return false;
+    const templateItem = this.jobList.querySelector(SELECTORS.item);
+    if (!templateItem || !(templateItem instanceof HTMLElement)) {
+      console.error('[JobBoard] Missing template .careers-list_item');
+      return;
     }
 
-    this.paginationWrapper = document.querySelector(SELECTORS.paginationWrapper);
-    if (!this.paginationWrapper) {
-      console.error('[JobBoard] Missing required attribute: dev-role="job-pagination-wrapper"');
-      return false;
-    }
+    this.itemTemplate = templateItem.cloneNode(true) as HTMLElement;
+    this.filterForm = this.root.querySelector(SELECTORS.filtersForm);
 
-    this.btnPrev = document.querySelector(SELECTORS.btnPrev);
-    if (!this.btnPrev) {
-      console.error('[JobBoard] Missing required attribute: dev-target="btn-prev"');
-      return false;
-    }
+    await this.loadJobs();
 
-    this.btnNext = document.querySelector(SELECTORS.btnNext);
-    if (!this.btnNext) {
-      console.error('[JobBoard] Missing required attribute: dev-target="btn-next"');
-      return false;
-    }
+    this.bindFilters();
+    this.renderFiltered();
 
-    this.pageBtnTemplate = document.querySelector(SELECTORS.pageBtnTemplate);
-    if (!this.pageBtnTemplate) {
-      console.error('[JobBoard] Missing required attribute: dev-target="page-btn-template"');
-      return false;
-    }
-
-    this.pageBtnWrapper = this.pageBtnTemplate.parentElement;
-    if (!this.pageBtnWrapper) {
-      console.error('[JobBoard] Page button template must have a parent wrapper');
-      return false;
-    }
-
-    // Featured jobs elements (optional - won't fail if not present)
-    this.featuredJobList = document.querySelector(SELECTORS.featuredJobList);
-    this.featuredJobCardTemplate = document.querySelector(SELECTORS.featuredJobCard);
-
-    if (this.featuredJobList && !this.featuredJobCardTemplate) {
-      console.error('[JobBoard] Missing required attribute: dev-target="featured-job-card"');
-    }
-
-    return true;
+    window.dispatchEvent(
+      new CustomEvent('jobboard:rendered', { detail: { count: this.jobs.length } })
+    );
   }
 
-  /**
-   * Bind event listeners
-   */
-  private bindEvents(): void {
-    this.btnPrev?.addEventListener('click', () => this.goToPage(this.currentPage - 1));
-    this.btnNext?.addEventListener('click', () => this.goToPage(this.currentPage + 1));
+  private readFilterInputs(): { location: string; category: string; title: string } {
+    const loc =
+      this.filterForm?.querySelector<HTMLSelectElement>(SELECTORS.filterLocation)?.value ?? '';
+    const cat =
+      this.filterForm?.querySelector<HTMLSelectElement>(SELECTORS.filterCategory)?.value ?? '';
+    const title =
+      this.filterForm?.querySelector<HTMLInputElement>(SELECTORS.filterTitle)?.value ?? '';
+    return { location: loc, category: cat, title };
   }
 
-  /**
-   * Load jobs from API (raw Workday response: { data: [...], total? })
-   */
+  private bindFilters(): void {
+    if (!this.filterForm) return;
+
+    this.filterForm.addEventListener('submit', (e) => e.preventDefault());
+    this.filterForm.addEventListener('change', () => this.renderFiltered());
+
+    const titleInput = this.filterForm.querySelector<HTMLInputElement>(SELECTORS.filterTitle);
+    if (titleInput) {
+      titleInput.addEventListener(
+        'input',
+        debounce(() => this.renderFiltered(), 200)
+      );
+    }
+  }
+
+  private renderFiltered(): void {
+    if (!this.jobList || !this.itemTemplate) return;
+
+    const { location, category, title } = this.readFilterInputs();
+    const visible = filterJobs(this.jobs, location, category, title);
+
+    this.jobList.innerHTML = '';
+
+    for (const job of visible) {
+      const item = this.itemTemplate.cloneNode(true) as HTMLElement;
+      populateCareerItem(item, job);
+      this.jobList.appendChild(item);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('jobboard:filtered', {
+        detail: { total: this.jobs.length, visible: visible.length, location, category, title },
+      })
+    );
+  }
+
   private async loadJobs(): Promise<void> {
     try {
       const response = await fetch(API_ENDPOINT);
@@ -236,237 +274,32 @@ export class JobBoardController {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const raw = await response.json();
-
-      // Extract job array: Workday returns { data, total } or array
-      this.jobs = Array.isArray(raw)
+      const arr = Array.isArray(raw)
         ? raw
         : Array.isArray(raw?.data)
           ? raw.data
           : Array.isArray(raw?.jobPostings)
             ? raw.jobPostings
             : [];
+      this.jobs = arr as Job[];
     } catch (error) {
       console.error('[JobBoard] Failed to fetch jobs:', error);
-      return;
-    }
-
-    this.extractDepartments();
-    this.renderFeaturedJobs();
-    this.renderFilters();
-    this.applyFilter(null); // Show all jobs initially
-  }
-
-  /**
-   * Render featured jobs (4 most recent by postedDate)
-   */
-  private renderFeaturedJobs(): void {
-    if (!this.featuredJobList || !this.featuredJobCardTemplate) return;
-
-    // Clear existing featured jobs
-    this.featuredJobList.innerHTML = '';
-
-    // Sort jobs by date (most recent first) and take top 4
-    const featuredJobs = [...this.jobs]
-      .sort((a, b) => getDate(b).getTime() - getDate(a).getTime())
-      .slice(0, FEATURED_JOBS_COUNT);
-
-    featuredJobs.forEach((job) => {
-      const card = this.featuredJobCardTemplate!.cloneNode(true) as HTMLElement;
-
-      const titleEl = card.querySelector(SELECTORS.featuredJobTitle);
-      if (titleEl) titleEl.textContent = getTitle(job);
-
-      const descEl = card.querySelector(SELECTORS.featuredJobDesc);
-      if (descEl) descEl.textContent = getLocationLabel(job);
-
-      const categoryEl = card.querySelector(SELECTORS.featuredJobCategory);
-      if (categoryEl) categoryEl.textContent = getDepartment(job);
-
-      const ctaEl = card.querySelector(SELECTORS.featuredJobCta) as HTMLAnchorElement | null;
-      if (ctaEl) {
-        ctaEl.href = getPostingUrl(job);
-        ctaEl.target = '_blank';
-        ctaEl.rel = 'noopener noreferrer';
-      }
-
-      this.featuredJobList!.appendChild(card);
-    });
-  }
-
-  /**
-   * Extract unique departments that have at least one job
-   */
-  private extractDepartments(): void {
-    const deptSet = new Set<string>();
-    this.jobs.forEach((job) => {
-      const dept = getDepartment(job);
-      if (dept) deptSet.add(dept);
-    });
-    this.departments = Array.from(deptSet).sort();
-  }
-
-  /**
-   * Render filter buttons
-   */
-  private renderFilters(): void {
-    if (!this.filtersWrapper || !this.filterTemplate) return;
-
-    // Clear existing filters
-    this.filtersWrapper.innerHTML = '';
-
-    // Create "View all" filter
-    const viewAllBtn = this.filterTemplate.cloneNode(true) as HTMLElement;
-    const viewAllText = viewAllBtn.querySelector(SELECTORS.filterText);
-    if (viewAllText) {
-      viewAllText.textContent = 'View all';
-    }
-    viewAllBtn.classList.add('is-active');
-    viewAllBtn.addEventListener('click', () => this.handleFilterClick(null, viewAllBtn));
-    this.filtersWrapper.appendChild(viewAllBtn);
-
-    // Create department filters
-    this.departments.forEach((dept) => {
-      const filterBtn = this.filterTemplate!.cloneNode(true) as HTMLElement;
-      const filterText = filterBtn.querySelector(SELECTORS.filterText);
-      if (filterText) {
-        filterText.textContent = dept;
-      }
-      filterBtn.classList.remove('is-active');
-      filterBtn.addEventListener('click', () => this.handleFilterClick(dept, filterBtn));
-      this.filtersWrapper!.appendChild(filterBtn);
-    });
-  }
-
-  /**
-   * Handle filter button click
-   */
-  private handleFilterClick(department: string | null, button: HTMLElement): void {
-    // Update active state
-    const allFilters = this.filtersWrapper?.querySelectorAll(SELECTORS.filterTag);
-    allFilters?.forEach((filter) => filter.classList.remove('is-active'));
-    button.classList.add('is-active');
-
-    this.applyFilter(department);
-  }
-
-  /**
-   * Apply filter and reset to page 1
-   */
-  private applyFilter(department: string | null): void {
-    this.currentFilter = department;
-    this.currentPage = 1;
-
-    if (department === null) {
-      this.filteredJobs = [...this.jobs];
-    } else {
-      this.filteredJobs = this.jobs.filter((job) => getDepartment(job) === department);
-    }
-
-    this.renderJobs();
-    this.renderPagination();
-  }
-
-  /**
-   * Render job cards for current page
-   */
-  private renderJobs(): void {
-    if (!this.jobList || !this.jobCardTemplate) return;
-
-    // Clear existing jobs
-    this.jobList.innerHTML = '';
-
-    // Calculate pagination slice
-    const startIndex = (this.currentPage - 1) * JOBS_PER_PAGE;
-    const endIndex = startIndex + JOBS_PER_PAGE;
-    const pageJobs = this.filteredJobs.slice(startIndex, endIndex);
-
-    pageJobs.forEach((job) => {
-      const card = this.jobCardTemplate!.cloneNode(true) as HTMLElement;
-
-      const titleEl = card.querySelector(SELECTORS.jobTitle);
-      if (titleEl) titleEl.textContent = getTitle(job);
-
-      const descEl = card.querySelector(SELECTORS.jobDesc);
-      if (descEl) descEl.textContent = getLocationLabel(job);
-
-      const categoryEl = card.querySelector(SELECTORS.jobCategory);
-      if (categoryEl) categoryEl.textContent = getDepartment(job);
-
-      const ctaEl = card.querySelector(SELECTORS.jobCta) as HTMLAnchorElement | null;
-      if (ctaEl) {
-        ctaEl.href = getPostingUrl(job);
-        ctaEl.target = '_blank';
-        ctaEl.rel = 'noopener noreferrer';
-      }
-
-      this.jobList!.appendChild(card);
-    });
-  }
-
-  /**
-   * Render pagination controls
-   */
-  private renderPagination(): void {
-    if (!this.paginationWrapper || !this.pageBtnTemplate || !this.pageBtnWrapper) return;
-
-    const totalPages = Math.ceil(this.filteredJobs.length / JOBS_PER_PAGE);
-
-    // Show/hide pagination wrapper
-    if (this.filteredJobs.length <= JOBS_PER_PAGE) {
-      this.paginationWrapper.classList.add('hide');
-    } else {
-      this.paginationWrapper.classList.remove('hide');
-    }
-
-    // Update prev/next button states
-    if (this.btnPrev) {
-      this.btnPrev.disabled = this.currentPage <= 1;
-      this.btnPrev.classList.toggle('is-disabled', this.currentPage <= 1);
-    }
-
-    if (this.btnNext) {
-      this.btnNext.disabled = this.currentPage >= totalPages;
-      this.btnNext.classList.toggle('is-disabled', this.currentPage >= totalPages);
-    }
-
-    // Clear existing page buttons
-    this.pageBtnWrapper.innerHTML = '';
-
-    // Create page buttons
-    for (let i = 1; i <= totalPages; i++) {
-      const pageBtn = this.pageBtnTemplate.cloneNode(true) as HTMLButtonElement;
-      pageBtn.textContent = String(i);
-      pageBtn.classList.toggle('is-active', i === this.currentPage);
-      pageBtn.addEventListener('click', () => this.goToPage(i));
-      this.pageBtnWrapper.appendChild(pageBtn);
+      this.jobs = [];
     }
   }
 
-  /**
-   * Navigate to a specific page
-   */
-  private goToPage(page: number): void {
-    const totalPages = Math.ceil(this.filteredJobs.length / JOBS_PER_PAGE);
-
-    if (page < 1 || page > totalPages) return;
-
-    this.currentPage = page;
-    this.renderJobs();
-    this.renderPagination();
-
-    // Scroll to top of job list
-    this.jobList?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  /**
-   * Refresh jobs from API
-   */
   async refresh(): Promise<void> {
+    if (!this.jobList || !this.itemTemplate) return;
+
     await this.loadJobs();
+    this.renderFiltered();
+
+    window.dispatchEvent(
+      new CustomEvent('jobboard:rendered', { detail: { count: this.jobs.length } })
+    );
   }
 }
 
-// Expose refresh function globally
 declare global {
   interface Window {
     refreshJobBoard: (() => Promise<void>) | null;
