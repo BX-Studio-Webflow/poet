@@ -118,27 +118,6 @@ export function parseCityAttribute(value: string): { citySlug: string; stateCode
   return { citySlug: v.slice(0, last), stateCode: maybeState.toUpperCase() };
 }
 
-function normalizeLocationCitySlug(descriptor: string): string {
-  const beforeComma = descriptor.split(',')[0]?.trim() ?? '';
-  return beforeComma
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-function matchesCityPage(job: Job, parsed: { citySlug: string; stateCode: string }): boolean {
-  const code = job.primaryLocation?.region?.code?.toUpperCase();
-  if (code !== parsed.stateCode) return false;
-  const slug = normalizeLocationCitySlug(getLocationLabel(job));
-  return slug === parsed.citySlug;
-}
-
-function isInternJob(job: Job): boolean {
-  const title = getTitle(job).toLowerCase();
-  const jt = job.jobType?.descriptor?.toLowerCase() ?? '';
-  return title.includes('intern') || jt.includes('intern');
-}
-
 function normalizeListMode(raw: string | null): CareersListMode {
   const m = (raw ?? 'all').trim().toLowerCase();
   if (m === 'cities' || m === 'interns') return m;
@@ -166,6 +145,7 @@ const SELECTORS = {
   applyAnchor: '.career-card_details_button a',
   clickableBtn: '.clickable_btn',
   clickableSrText: '.clickable_text',
+  paginationWrap: '.pagination_wrap',
 } as const;
 
 function populateCareerItem(item: HTMLElement, job: Job): void {
@@ -230,6 +210,8 @@ export class JobBoardController {
   private filterForm: HTMLFormElement | null = null;
   private listMode: CareersListMode = 'all';
   private cityParsed: { citySlug: string; stateCode: string } | null = null;
+  private currentPage: number = 1;
+  private itemsPerPage: number = 10;
 
   async init(): Promise<void> {
     this.root = document.querySelector(SELECTORS.root);
@@ -266,6 +248,7 @@ export class JobBoardController {
     await this.loadJobs();
 
     this.bindFilters();
+    this.bindPagination();
     this.renderFiltered();
 
     window.dispatchEvent(
@@ -293,26 +276,90 @@ export class JobBoardController {
     if (!this.filterForm) return;
 
     this.filterForm.addEventListener('submit', (e) => e.preventDefault());
-    this.filterForm.addEventListener('change', () => this.renderFiltered());
+    this.filterForm.addEventListener('change', () => {
+      this.currentPage = 1;
+      this.renderFiltered();
+    });
 
     const titleInput = this.filterForm.querySelector<HTMLInputElement>(SELECTORS.filterTitle);
     if (titleInput) {
       titleInput.addEventListener(
         'input',
-        debounce(() => this.renderFiltered(), 200)
+        debounce(() => {
+          this.currentPage = 1;
+          this.renderFiltered();
+        }, 200)
       );
     }
   }
 
-  private jobsAfterMode(): Job[] {
-    if (this.listMode === 'cities') {
-      if (!this.cityParsed) return [];
-      return this.jobs.filter((j) => matchesCityPage(j, this.cityParsed!));
+  private bindPagination(): void {
+    const paginationWrap = this.root?.querySelector(SELECTORS.paginationWrap);
+    if (!paginationWrap) return;
+
+    paginationWrap.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      const link = target.closest('a') as HTMLAnchorElement | null;
+      if (!link) return;
+
+      const linkWrap = link.closest('.pagination_link_wrap');
+      if (linkWrap) {
+        // prev or next
+        const isPrev = linkWrap === paginationWrap.firstElementChild;
+        if (isPrev) {
+          this.currentPage = Math.max(1, this.currentPage - 1);
+        } else {
+          // calculate total pages
+          const { location, category, title } = this.readFilterInputs();
+          const pool = this.jobsAfterMode();
+          const allVisible = filterJobs(pool, location, category, title);
+          const totalPages = Math.ceil(allVisible.length / this.itemsPerPage);
+          this.currentPage = Math.min(totalPages, this.currentPage + 1);
+        }
+        this.renderFiltered();
+        this.jobList?.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+
+      const pageText = link.textContent?.trim();
+      if (pageText === '...' || !pageText) return;
+
+      const page = parseInt(pageText, 10);
+      if (isNaN(page)) return;
+
+      this.currentPage = page;
+      this.renderFiltered();
+      this.jobList?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  private updatePagination(totalPages: number): void {
+    const paginationWrap = this.root?.querySelector(SELECTORS.paginationWrap) as HTMLElement | null;
+    if (!paginationWrap) return;
+
+    const numberWrap = paginationWrap.querySelector(
+      '.pagination_number_wrap'
+    ) as HTMLElement | null;
+    if (!numberWrap) return;
+
+    if (totalPages > 1) {
+      paginationWrap.classList.remove('hide');
+      numberWrap.innerHTML = '';
+
+      for (let i = 1; i <= totalPages; i++) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'pagination_number_link';
+        link.textContent = i.toString();
+        if (i === this.currentPage) {
+          link.classList.add('active'); // assume there's an active class
+        }
+        numberWrap.appendChild(link);
+      }
+    } else {
+      paginationWrap.classList.add('hide');
     }
-    if (this.listMode === 'interns') {
-      return this.jobs.filter(isInternJob);
-    }
-    return this.jobs;
   }
 
   private renderFiltered(): void {
@@ -320,7 +367,15 @@ export class JobBoardController {
 
     const { location, category, title } = this.readFilterInputs();
     const pool = this.jobsAfterMode();
-    const visible = filterJobs(pool, location, category, title);
+    const allVisible = filterJobs(pool, location, category, title);
+
+    const totalItems = allVisible.length;
+    const totalPages = Math.ceil(totalItems / this.itemsPerPage);
+    this.currentPage = Math.min(this.currentPage, totalPages || 1);
+
+    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+    const endIndex = startIndex + this.itemsPerPage;
+    const visible = allVisible.slice(startIndex, endIndex);
 
     this.jobList.innerHTML = '';
 
@@ -330,12 +385,16 @@ export class JobBoardController {
       this.jobList.appendChild(item);
     }
 
+    this.updatePagination(totalPages);
+
     window.dispatchEvent(
       new CustomEvent('jobboard:filtered', {
         detail: {
           total: this.jobs.length,
           pool: pool.length,
-          visible: visible.length,
+          visible: totalItems,
+          page: this.currentPage,
+          totalPages,
           location,
           category,
           title,
@@ -344,6 +403,25 @@ export class JobBoardController {
         },
       })
     );
+  }
+
+  private jobsAfterMode(): Job[] {
+    if (this.listMode === 'all') return this.jobs;
+    if (this.listMode === 'cities' && this.cityParsed) {
+      return this.jobs.filter((job) => {
+        const loc = getLocationLabel(job).toLowerCase();
+        const cityMatch = loc.includes(this.cityParsed!.citySlug.toLowerCase());
+        const stateMatch = loc.includes(this.cityParsed!.stateCode);
+        return cityMatch && stateMatch;
+      });
+    }
+    if (this.listMode === 'interns') {
+      return this.jobs.filter((job) => {
+        const timeType = job.timeType?.descriptor?.toLowerCase() ?? '';
+        return timeType.includes('intern');
+      });
+    }
+    return this.jobs;
   }
 
   private async loadJobs(): Promise<void> {
@@ -370,6 +448,7 @@ export class JobBoardController {
   async refresh(): Promise<void> {
     if (!this.jobList || !this.itemTemplate) return;
 
+    this.currentPage = 1;
     await this.loadJobs();
     this.renderFiltered();
 
