@@ -107,7 +107,7 @@ function filterJobs(jobs: Job[], location: string, category: string, title: stri
 
 export type CareersListMode = 'all' | 'cities' | 'interns';
 
-/** `city="alexandria-in"` → slug `alexandria`, state `IN` */
+/** `city="alexandria-in"` → slug `alexandria`, state `in` */
 export function parseCityAttribute(value: string): { citySlug: string; stateCode: string } | null {
   const v = value.trim().toLowerCase();
   if (!v) return null;
@@ -115,7 +115,7 @@ export function parseCityAttribute(value: string): { citySlug: string; stateCode
   if (last <= 0) return null;
   const maybeState = v.slice(last + 1);
   if (maybeState.length !== 2 || !/^[a-z]{2}$/.test(maybeState)) return null;
-  return { citySlug: v.slice(0, last), stateCode: maybeState.toUpperCase() };
+  return { citySlug: v.slice(0, last), stateCode: maybeState };
 }
 
 function normalizeListMode(raw: string | null): CareersListMode {
