@@ -417,8 +417,8 @@ export class JobBoardController {
     }
     if (this.listMode === 'interns') {
       return this.jobs.filter((job) => {
-        const timeType = job.timeType?.descriptor?.toLowerCase() ?? '';
-        return timeType.includes('intern');
+        const jobType = job.jobType?.descriptor?.toLowerCase() ?? '';
+        return jobType.includes('intern') || job.title.toLowerCase().includes('intern');
       });
     }
     return this.jobs;
