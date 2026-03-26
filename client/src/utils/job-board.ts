@@ -248,6 +248,7 @@ export class JobBoardController {
     await this.loadJobs();
 
     this.bindFilters();
+    this.applyUrlFilterValues();
     this.bindPagination();
     this.renderFiltered();
 
@@ -270,6 +271,57 @@ export class JobBoardController {
     const title =
       this.filterForm?.querySelector<HTMLInputElement>(SELECTORS.filterTitle)?.value ?? '';
     return { location: loc, category: cat, title };
+  }
+
+  private applyUrlFilterValues(): void {
+    if (!this.filterForm) return;
+
+    const params = new URLSearchParams(window.location.search);
+
+    const locationValue =
+      params.get('careers_location_equal') ??
+      params.get('careers_location') ??
+      params.get('location');
+    const categoryValue =
+      params.get('careers_category_equal') ??
+      params.get('careers_category') ??
+      params.get('category');
+    const titleValue =
+      params.get('careers_title_contains') ?? params.get('careers_title') ?? params.get('title');
+
+    const setSelectValue = (field: keyof typeof SELECTORS, value: string | null): void => {
+      if (!value) return;
+      const select = this.filterForm?.querySelector<HTMLSelectElement>(SELECTORS[field]);
+      if (!select) return;
+
+      const candidate = Array.from(select.options).find(
+        (opt) => opt.value === value || opt.textContent?.trim() === value
+      );
+
+      if (candidate) {
+        select.value = candidate.value;
+      } else {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+        select.value = value;
+      }
+
+      // Bubble a change event so other listeners (filters/pagination) respond.
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    if (locationValue) setSelectValue('filterLocation', locationValue);
+    if (categoryValue) setSelectValue('filterCategory', categoryValue);
+    if (titleValue) {
+      const titleInput = this.filterForm.querySelector<HTMLInputElement>(SELECTORS.filterTitle);
+      if (titleInput) titleInput.value = titleValue;
+    }
+
+    if (locationValue || categoryValue || titleValue) {
+      this.currentPage = 1;
+    }
   }
 
   private bindFilters(): void {
