@@ -247,6 +247,10 @@ export class JobBoardController {
 
     await this.loadJobs();
 
+    if (window.location.pathname === '/about/locations') {
+      this.updateLocationCategories();
+    }
+
     this.bindFilters();
     this.applyUrlFilterValues();
     this.bindPagination();
@@ -497,11 +501,66 @@ export class JobBoardController {
     }
   }
 
+  private updateLocationCategories(): void {
+    const locationItems = document.querySelectorAll('.locations-map_list_item');
+    const locationData: Record<string, string[]> = {};
+    for (const item of locationItems) {
+      const titleEl = item.querySelector('[data-map-el="title"]') as HTMLElement | null;
+      if (!titleEl) continue;
+      const locationName = titleEl.textContent?.trim();
+      if (!locationName) continue;
+      // Find jobs matching this location
+      const matchingJobs = this.jobs.filter((job) => getLocationLabel(job) === locationName);
+      // Get unique categories
+      const categories = new Set<string>();
+      for (const job of matchingJobs) {
+        const cat = getCategory(job);
+        if (cat && cat !== 'General') categories.add(cat);
+      }
+      // Store data for event
+      locationData[locationName] = Array.from(categories).sort();
+      // Find the nest-target for job-categories
+      const nestTarget = item.querySelector(
+        '[fs-list-nest="job-categories"][fs-list-element="nest-target"]'
+      ) as HTMLElement | null;
+      if (!nestTarget) continue;
+      const dynItems = nestTarget.querySelector('.w-dyn-items') as HTMLElement | null;
+      if (!dynItems) continue;
+      // Clear existing
+      dynItems.innerHTML = '';
+      // Add new
+      for (const cat of Array.from(categories).sort()) {
+        const dynItem = document.createElement('div');
+        dynItem.className = 'w-dyn-item';
+        dynItem.setAttribute('role', 'listitem');
+        const catDiv = document.createElement('div');
+        catDiv.setAttribute('fs-list-field', 'job-category');
+        catDiv.textContent = cat;
+        const link = document.createElement('a');
+        link.href = '#'; // Placeholder, as actual links may vary
+        link.className = 'hide';
+        link.textContent = 'Text Link';
+        dynItem.appendChild(catDiv);
+        dynItem.appendChild(link);
+        dynItems.appendChild(dynItem);
+      }
+    }
+    // Emit custom event with JSON data
+    window.dispatchEvent(
+      new CustomEvent('locationCategoriesUpdated', {
+        detail: locationData,
+      })
+    );
+  }
+
   async refresh(): Promise<void> {
     if (!this.jobList || !this.itemTemplate) return;
 
     this.currentPage = 1;
     await this.loadJobs();
+    if (window.location.pathname === '/about/locations') {
+      this.updateLocationCategories();
+    }
     this.renderFiltered();
 
     window.dispatchEvent(
