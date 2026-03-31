@@ -255,6 +255,7 @@ export class JobBoardController {
     this.bindFilters();
     this.applyUrlFilterValues();
     this.bindPagination();
+    this.bindReset();
     this.renderFiltered();
 
     window.dispatchEvent(
@@ -409,6 +410,37 @@ export class JobBoardController {
         }
       });
     });
+  }
+
+  private bindReset(): void {
+    const resetBtn = this.root?.querySelector(
+      '[data-careers-el="reset"]'
+    ) as HTMLButtonElement | null;
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        const locationSelect = this.filterForm?.querySelector<HTMLSelectElement>(
+          SELECTORS.filterLocation
+        );
+        if (locationSelect) {
+          locationSelect.value = '';
+          locationSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const categorySelect = this.filterForm?.querySelector<HTMLSelectElement>(
+          SELECTORS.filterCategory
+        );
+        if (categorySelect) {
+          categorySelect.value = '';
+          categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const titleInput = this.filterForm?.querySelector<HTMLInputElement>(SELECTORS.filterTitle);
+        if (titleInput) {
+          titleInput.value = '';
+          titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        this.currentPage = 1;
+        this.renderFiltered();
+      });
+    }
   }
 
   private updatePagination(totalPages: number): void {
