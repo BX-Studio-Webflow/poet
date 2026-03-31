@@ -146,6 +146,7 @@ const SELECTORS = {
   clickableBtn: '.clickable_btn',
   clickableSrText: '.clickable_text',
   paginationWrap: '.pagination_wrap',
+  empty: '[data-careers-el="empty"]',
 } as const;
 
 function populateCareerItem(item: HTMLElement, job: Job): void {
@@ -374,7 +375,17 @@ export class JobBoardController {
           this.currentPage = Math.min(totalPages, this.currentPage + 1);
         }
         this.renderFiltered();
-        this.jobList?.scrollIntoView({ behavior: 'smooth' });
+        requestAnimationFrame(() => {
+          const section = document.getElementById('careers');
+          if (section) {
+            const rect = section.getBoundingClientRect();
+            const offset = 10; // Adjust this offset value as needed
+            window.scrollTo({
+              top: window.scrollY + rect.top - offset,
+              behavior: 'smooth',
+            });
+          }
+        });
         return;
       }
 
@@ -386,7 +397,17 @@ export class JobBoardController {
 
       this.currentPage = page;
       this.renderFiltered();
-      this.jobList?.scrollIntoView({ behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        const section = document.getElementById('careers');
+        if (section) {
+          const rect = section.getBoundingClientRect();
+          const offset = 10; // Adjust this offset value as needed
+          window.scrollTo({
+            top: window.scrollY + rect.top - offset,
+            behavior: 'smooth',
+          });
+        }
+      });
     });
   }
 
@@ -413,8 +434,31 @@ export class JobBoardController {
         }
         numberWrap.appendChild(link);
       }
+
+      // Update prev/next disabled state
+      const prevEl = paginationWrap.firstElementChild as HTMLElement | null;
+      const nextEl = paginationWrap.lastElementChild as HTMLElement | null;
+      if (prevEl) {
+        if (this.currentPage === 1) {
+          prevEl.classList.add('is-list-pagination-disabled');
+        } else {
+          prevEl.classList.remove('is-list-pagination-disabled');
+        }
+      }
+      if (nextEl) {
+        if (this.currentPage === totalPages) {
+          nextEl.classList.add('is-list-pagination-disabled');
+        } else {
+          nextEl.classList.remove('is-list-pagination-disabled');
+        }
+      }
     } else {
       paginationWrap.classList.add('hide');
+      // Remove disabled classes when hidden
+      const prevEl = paginationWrap.firstElementChild as HTMLElement | null;
+      const nextEl = paginationWrap.lastElementChild as HTMLElement | null;
+      if (prevEl) prevEl.classList.remove('is-list-pagination-disabled');
+      if (nextEl) nextEl.classList.remove('is-list-pagination-disabled');
     }
   }
 
@@ -439,6 +483,15 @@ export class JobBoardController {
       const item = this.itemTemplate.cloneNode(true) as HTMLElement;
       populateCareerItem(item, job);
       this.jobList.appendChild(item);
+    }
+
+    const emptyEl = this.root?.querySelector(SELECTORS.empty) as HTMLElement | null;
+    if (emptyEl) {
+      if (visible.length === 0) {
+        emptyEl.classList.remove('hide');
+      } else {
+        emptyEl.classList.add('hide');
+      }
     }
 
     this.updatePagination(totalPages);
@@ -505,12 +558,18 @@ export class JobBoardController {
     const locationItems = document.querySelectorAll('.locations-map_list_item');
     const locationData: Record<string, string[]> = {};
     for (const item of locationItems) {
-      const titleEl = item.querySelector('[data-map-el="title"]') as HTMLElement | null;
-      if (!titleEl) continue;
-      const locationName = titleEl.textContent?.trim();
-      if (!locationName) continue;
+      const titleEl = item.querySelector('[data-city]') as HTMLElement | null;
+      if (!titleEl) {
+        console.error(`[JobBoard] Missing [data-city] in .locations-map_list_item`);
+        continue;
+      }
+      const locationName = titleEl.getAttribute('data-city')?.trim();
+      if (!locationName) {
+        console.error(`[JobBoard] Empty location name in .locations-map_list_item`);
+        continue;
+      }
       // Find jobs matching this location
-      const matchingJobs = this.jobs.filter((job) => getLocationLabel(job) === locationName);
+      const matchingJobs = this.jobs.filter((job) => matchesLocation(job, locationName));
       // Get unique categories
       const categories = new Set<string>();
       for (const job of matchingJobs) {
@@ -519,30 +578,16 @@ export class JobBoardController {
       }
       // Store data for event
       locationData[locationName] = Array.from(categories).sort();
-      // Find the nest-target for job-categories
-      const nestTarget = item.querySelector(
-        '[fs-list-nest="job-categories"][fs-list-element="nest-target"]'
-      ) as HTMLElement | null;
-      if (!nestTarget) continue;
-      const dynItems = nestTarget.querySelector('.w-dyn-items') as HTMLElement | null;
-      if (!dynItems) continue;
+      // Find the container for job-categories
+      const categoryContainer = item.querySelector('[data-city]') as HTMLElement | null;
+      if (!categoryContainer) continue;
       // Clear existing
-      dynItems.innerHTML = '';
-      // Add new
+      categoryContainer.innerHTML = '';
+      // Add new category text elements
       for (const cat of Array.from(categories).sort()) {
-        const dynItem = document.createElement('div');
-        dynItem.className = 'w-dyn-item';
-        dynItem.setAttribute('role', 'listitem');
-        const catDiv = document.createElement('div');
-        catDiv.setAttribute('fs-list-field', 'job-category');
-        catDiv.textContent = cat;
-        const link = document.createElement('a');
-        link.href = '#'; // Placeholder, as actual links may vary
-        link.className = 'hide';
-        link.textContent = 'Text Link';
-        dynItem.appendChild(catDiv);
-        dynItem.appendChild(link);
-        dynItems.appendChild(dynItem);
+        const categoryElement = document.createElement('div');
+        categoryElement.textContent = cat;
+        categoryContainer.appendChild(categoryElement);
       }
     }
     // Emit custom event with JSON data
