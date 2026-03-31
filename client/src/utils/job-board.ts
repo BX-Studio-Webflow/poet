@@ -612,7 +612,10 @@ export class JobBoardController {
       locationData[locationName] = Array.from(categories).sort();
       // Find the container for job-categories
       const categoryContainer = item.querySelector('[data-city]') as HTMLElement | null;
-      if (!categoryContainer) continue;
+      if (!categoryContainer) {
+        console.error(`[JobBoard] Missing category container in .locations-map_list_item`);
+        continue;
+      }
       // Clear existing
       categoryContainer.innerHTML = '';
       // Add new category text elements
