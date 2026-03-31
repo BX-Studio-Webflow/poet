@@ -618,6 +618,8 @@ export class JobBoardController {
       // Add new category text elements
       for (const cat of Array.from(categories).sort()) {
         const categoryElement = document.createElement('div');
+        categoryElement.setAttribute('data-category', cat);
+        categoryElement.setAttribute('fs-list-field', 'job-category');
         categoryElement.textContent = cat;
         categoryContainer.appendChild(categoryElement);
       }
