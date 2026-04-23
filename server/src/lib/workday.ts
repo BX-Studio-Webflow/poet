@@ -3,6 +3,8 @@
  * Docs: https://community.workday.com/sites/default/files/file-hosting/restapi/#recruiting/v4/jobPostings
  */
 
+import { Redis } from '@upstash/redis';
+
 export interface WorkdayTokenResponse {
   access_token: string;
   token_type: string;
@@ -10,15 +12,52 @@ export interface WorkdayTokenResponse {
   refresh_token?: string;
 }
 
+/** Redis key per tenant so preview/prod tenants do not overwrite each other in one KV. */
+function workdayRefreshStorageKey(tenant: string): string {
+  return `poet:workday:refresh:${tenant}`;
+}
+
+function getUpstashRedis(): Redis | null {
+  const url =
+    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
+}
+
+async function readStoredRefreshToken(
+  redis: Redis,
+  tenant: string
+): Promise<string | null> {
+  const raw = await redis.get<string>(workdayRefreshStorageKey(tenant));
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  return raw;
+}
+
+async function writeStoredRefreshToken(
+  redis: Redis,
+  tenant: string,
+  token: string
+): Promise<void> {
+  await redis.set(workdayRefreshStorageKey(tenant), token);
+}
+
 /**
- * Request a new access token using the refresh token grant type
+ * Request a new access token using the refresh token grant type.
+ * When Upstash / Vercel KV Redis REST env is set, the refresh token is read from KV first
+ * and updated after each success (including Workday rotation).
  */
 export async function getWorkdayAccessToken(): Promise<string> {
   const baseUrl = process.env.WORKDAY_BASE_URL;
   const tenant = process.env.WORKDAY_TENANT;
   const clientId = process.env.WORKDAY_CLIENT_ID;
   const clientSecret = process.env.WORKDAY_CLIENT_SECRET;
-  const refreshToken = process.env.WORKDAY_REFRESH_TOKEN;
+
+  const redis = getUpstashRedis();
+  const fromKv =
+    redis && tenant ? await readStoredRefreshToken(redis, tenant) : null;
+  const refreshToken = fromKv ?? process.env.WORKDAY_REFRESH_TOKEN;
 
   if (!baseUrl || !tenant || !clientId || !clientSecret || !refreshToken) {
     const missing = [
@@ -26,7 +65,10 @@ export async function getWorkdayAccessToken(): Promise<string> {
       !tenant && 'WORKDAY_TENANT',
       !clientId && 'WORKDAY_CLIENT_ID',
       !clientSecret && 'WORKDAY_CLIENT_SECRET',
-      !refreshToken && 'WORKDAY_REFRESH_TOKEN',
+      !refreshToken &&
+        (!redis
+          ? 'WORKDAY_REFRESH_TOKEN'
+          : 'WORKDAY_REFRESH_TOKEN (or seed KV key poet:workday:refresh:<tenant>)'),
     ].filter(Boolean);
     throw new Error(`Missing Workday env: ${missing.join(', ')}`);
   }
@@ -55,10 +97,15 @@ export async function getWorkdayAccessToken(): Promise<string> {
 
   const data: WorkdayTokenResponse = await response.json();
 
-  // Workday may rotate the refresh token - store the new one if returned
-  if (data.refresh_token && data.refresh_token !== refreshToken) {
+  const toPersist = data.refresh_token ?? refreshToken;
+  if (redis && toPersist) {
+    await writeStoredRefreshToken(redis, tenant, toPersist);
+    if (data.refresh_token && data.refresh_token !== refreshToken) {
+      console.info('[Workday] Persisted rotated refresh token to Upstash KV.');
+    }
+  } else if (data.refresh_token && data.refresh_token !== refreshToken) {
     console.warn(
-      '[Workday] New refresh token received. Update WORKDAY_REFRESH_TOKEN in your .env to avoid future auth issues.'
+      '[Workday] New refresh token received. Set Upstash KV env vars or update WORKDAY_REFRESH_TOKEN.'
     );
   }
 
