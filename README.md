@@ -178,6 +178,7 @@ pnpm install
 Copy `server/.env.example` to `server/.env` and add your Workday credentials:
 
 ```env
+# Optional: WORKDAY_PROFILE=preview | live (see server/.env.example for WORKDAY_PREVIEW_* / WORKDAY_LIVE_*)
 WORKDAY_BASE_URL=https://wd2-impl-services1.workday.com/ccx
 WORKDAY_TENANT=poet_preview
 WORKDAY_CLIENT_ID=your_client_id
@@ -420,7 +421,7 @@ Update the script tag in Webflow:
 
 The server auto-deploys to Vercel on push to `main`. Ensure environment variables are set in Vercel dashboard:
 
-- `WORKDAY_BASE_URL`, `WORKDAY_TENANT`, `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_REFRESH_TOKEN`
+- `WORKDAY_BASE_URL`, `WORKDAY_TENANT`, `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_REFRESH_TOKEN` (optional `WORKDAY_PROFILE` and `WORKDAY_PREVIEW_*` / `WORKDAY_LIVE_*`; see `server/.env.example`)
 
 #### Enabling Changesets Permissions
 

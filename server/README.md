@@ -74,9 +74,8 @@ The server integrates with Workday Recruiting v4 REST API:
 
 **Authentication (OAuth 2.0):**
 
-1. Request access token with `grant_type=refresh_token` and `refresh_token`
-2. Use `Authorization: Basic {client_id:client_secret}` on token request
-3. Use `Authorization: Bearer {access_token}` on job postings request
+1. Request access token with `grant_type=refresh_token`, `refresh_token`, `client_id`, and `client_secret` in the **form body** (not Basic auth).
+2. Use `Authorization: Bearer {access_token}` on job postings request
 
 **Docs:** [Workday Recruiting v4 - Job Postings](https://community.workday.com/sites/default/files/file-hosting/restapi/#recruiting/v4/jobPostings)
 
@@ -104,13 +103,18 @@ Copy `.env.example` to `.env` and fill in your Workday credentials:
 cp .env.example .env
 ```
 
-| Variable                | Description                                                          | Required |
-| ----------------------- | -------------------------------------------------------------------- | -------- |
-| `WORKDAY_BASE_URL`      | Workday API base (e.g. `https://wd2-impl-services1.workday.com/ccx`) | ✅       |
-| `WORKDAY_TENANT`        | Tenant name (e.g. `poet_preview`)                                    | ✅       |
-| `WORKDAY_CLIENT_ID`     | OAuth client ID                                                      | ✅       |
-| `WORKDAY_CLIENT_SECRET` | OAuth client secret                                                  | ✅       |
-| `WORKDAY_REFRESH_TOKEN` | OAuth refresh token                                                  | ✅       |
+| Variable                    | Description                                                                 | Required |
+| --------------------------- | --------------------------------------------------------------------------- | -------- |
+| `WORKDAY_PROFILE`           | Optional: `preview` / `dev` / `development` vs `live` / `prod` / `production`. If unset, only `WORKDAY_*` below is used. | —        |
+| `WORKDAY_BASE_URL`          | API base URL; also fallback when profile-specific URL is omitted            | ✅\*     |
+| `WORKDAY_TENANT`            | Tenant name; also fallback for profile-specific tenant                      | ✅\*     |
+| `WORKDAY_CLIENT_ID`         | OAuth client ID; fallback for profile-specific IDs                          | ✅\*     |
+| `WORKDAY_CLIENT_SECRET`     | OAuth client secret                                                         | ✅\*     |
+| `WORKDAY_REFRESH_TOKEN`     | OAuth refresh token                                                         | ✅\*     |
+| `WORKDAY_PREVIEW_*`         | `BASE_URL`, `TENANT`, `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN` when `WORKDAY_PROFILE=preview` | —        |
+| `WORKDAY_LIVE_*`            | Same pattern when `WORKDAY_PROFILE=live` (e.g. `services1.myworkday.com/ccx`, tenant `poet`) | —        |
+
+\*Required as a complete set after resolution (shared `WORKDAY_*` and/or profile overrides).
 
 ## Getting Started
 
@@ -155,7 +159,7 @@ The `/api/jobs` endpoint returns the raw Workday API response (e.g. `{ data: [..
 
 1. Connect your repository to Vercel
 2. Set environment variables in Vercel dashboard:
-   - `WORKDAY_BASE_URL`, `WORKDAY_TENANT`, `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_REFRESH_TOKEN`
+   - `WORKDAY_BASE_URL`, `WORKDAY_TENANT`, `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_REFRESH_TOKEN` (optional `WORKDAY_PROFILE` and `WORKDAY_PREVIEW_*` / `WORKDAY_LIVE_*`)
 3. Deploy
 
 ### Other Platforms
