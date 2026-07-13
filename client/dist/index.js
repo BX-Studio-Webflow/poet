@@ -1,1 +1,650 @@
-"use strict";(()=>{var P=Object.defineProperty;var _=(i,t,e)=>t in i?P(i,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):i[t]=e;var m=(i,t,e)=>_(i,typeof t!="symbol"?t+"":t,e);function S(i){let t=i.title??i.jobPostingTitle??i.descriptor;return String(t??"")}function y(i){let t=i.primaryLocation,e=i,r=t?.descriptor??e.locationsText??e.locations_text??e.location?.label;return String(r??"")}function b(i){let t=i.categories,e=i,r=(Array.isArray(t)&&t[0]?.descriptor)??e.department??e.jobFamilyReference?.descriptor??e.supervisoryOrganizationReference?.descriptor;return String(r??"General")}function x(i){let t=i,e=i.url??t.externalApplyUrl??t.externalApplyURL??t.postingUrl??t.applyUrl;if(typeof e=="string"&&e.startsWith("http"))return e;let r=t.externalPath??t.externalJobPath;return typeof r=="string"&&r?r.startsWith("/")?r:`/${r}`:"#"}function F(i){return i.timeType?.descriptor??""}function A(i){let t=i,e=i.startDate??t.postedOn??t.posted_on??t.start_date;return typeof e=="string"?e:""}function q(i){let t=i.trim();if(!t)return"\u2014";let e=new Date(t);if(Number.isNaN(e.getTime()))return"\u2014";let r=new Date,o=new Date(r.getFullYear(),r.getMonth(),r.getDate()),a=new Date(e.getFullYear(),e.getMonth(),e.getDate()),s=Math.floor((o.getTime()-a.getTime())/864e5);return s<=0?"Posted Today":s===1?"Posted Yesterday":s>=30?"Posted 30+ Days Ago":`Posted ${s} Days Ago`}function H(i){return q(A(i))}function J(i){let t=i.company?.descriptor?.trim();return t||(i.jobType?.descriptor??"")}function C(i,t){let e=t.trim().toLowerCase();if(!e)return!0;let r=y(i).toLowerCase();return r===e||r.startsWith(e+",")||e.includes(",")&&r===e?!0:r.includes(e)}function j(i,t){let e=t.trim().toLowerCase();return e?b(i).toLowerCase()===e:!0}function k(i,t){let e=t.trim().toLowerCase();return e?S(i).toLowerCase().includes(e):!0}function T(i,t,e,r){return i.filter(o=>C(o,t)&&j(o,e)&&k(o,r))}function I(i){let t=i.trim().toLowerCase();if(!t)return null;let e=t.lastIndexOf("-");if(e<=0)return null;let r=t.slice(e+1);return r.length!==2||!/^[a-z]{2}$/.test(r)?null:{citySlug:t.slice(0,e),stateCode:r}}function B(i){let t=(i??"all").trim().toLowerCase();return t==="cities"||t==="interns"?t:"all"}var D=localStorage.getItem("api-mode")==="local",R=D?"http://localhost:8000/api/jobs":"https://poet-server.vercel.app/api/jobs",c={root:".careers-list_list_wrap",filtersForm:"form.careers-list_filters_form",filterLocation:'select[fs-list-field="location"]',filterCategory:'select[fs-list-field="category"]',filterTitle:'input[fs-list-field="title"]',list:".careers-list_list",item:".careers-list_item",cardTitle:'[fs-list-field="title"], .career-card_heading_text',location:'[fs-list-field="location"]',category:'[fs-list-field="category"], [fs-list-field="job-category"]',secondaryText:".career-card_text",detailLabels:".career-card_detail_wrap .career-card_detail_label",postedOn:'[data-careers-el="posted-on"], [fs-list-field="posted-on"]',applyAnchor:".career-card_details_button a",clickableBtn:".clickable_btn",clickableSrText:".clickable_text",paginationWrap:".pagination_wrap",empty:'[data-careers-el="empty"]'};function O(i,t){let e=S(t),r=y(t),o=b(t),a=x(t),l=F(t),s=H(t),d=J(t),u=i.querySelector(c.cardTitle);u&&(u.textContent=e);let n=i.querySelector(c.secondaryText);n&&(n.textContent=d);let p=i.querySelector(c.location);p&&(p.textContent=r);let f=i.querySelectorAll(c.detailLabels);f.length>=2&&(f[1].textContent=l||"\u2014");let g=i.querySelector(c.postedOn);g?g.textContent=s:f.length>=3&&(f[2].textContent=s),i.querySelectorAll(c.category).forEach(L=>{L.textContent=o});let h=i.querySelector(c.applyAnchor);h&&(h.href=a,h.target="_blank",h.rel="noopener noreferrer");let w=i.querySelector(c.clickableSrText);w&&(w.textContent=e);let E=i.querySelector(c.clickableBtn);if(E&&a.startsWith("http")){let L=M=>{M.preventDefault(),window.open(a,"_blank","noopener,noreferrer")};E.addEventListener("click",L)}}function W(i,t){let e;return(...r)=>{e&&clearTimeout(e),e=setTimeout(()=>i(...r),t)}}var v=class{constructor(){m(this,"jobs",[]);m(this,"itemTemplate",null);m(this,"root",null);m(this,"jobList",null);m(this,"filterForm",null);m(this,"listMode","all");m(this,"cityParsed",null);m(this,"currentPage",1);m(this,"itemsPerPage",10)}async init(){if(this.root=document.querySelector(c.root),!this.root){console.error("[JobBoard] Missing .careers-list_list_wrap");return}if(this.jobList=this.root.querySelector(c.list),!this.jobList){console.error("[JobBoard] Missing .careers-list_list");return}let t=this.jobList.querySelector(c.item);if(!t||!(t instanceof HTMLElement)){console.error("[JobBoard] Missing template .careers-list_item");return}this.itemTemplate=t.cloneNode(!0),this.filterForm=this.root.querySelector(c.filtersForm),this.listMode=B(this.jobList.getAttribute("mode"));let e=this.jobList.getAttribute("city")??"";this.cityParsed=this.listMode==="cities"?I(e):null,this.listMode==="cities"&&!this.cityParsed&&console.error('[JobBoard] mode="cities" requires city="{city-slug}-{st}" (e.g. alexandria-in); got:',e||"(empty)"),this.disableFinsweetSelectCustom(),await this.loadJobs(),this.populateFilterOptions(),window.location.pathname==="/about/locations"&&this.updateLocationCategories(),this.bindFilters(),this.applyUrlFilterValues(),this.bindPagination(),this.bindReset(),this.renderFiltered(),window.dispatchEvent(new CustomEvent("jobboard:rendered",{detail:{count:this.jobs.length,mode:this.listMode,city:this.cityParsed}}))}readFilterInputs(){let t=this.filterForm?.querySelector(c.filterLocation)?.value??"",e=this.filterForm?.querySelector(c.filterCategory)?.value??"",r=this.filterForm?.querySelector(c.filterTitle)?.value??"";return{location:t,category:e,title:r}}disableFinsweetSelectCustom(){this.filterForm&&this.filterForm.querySelectorAll('[fs-selectcustom-element="dropdown"]').forEach(t=>{t.removeAttribute("fs-selectcustom-element"),t.removeAttribute("fs-selectcustom-hideinitial")})}populateFilterOptions(){if(!this.filterForm)return;let t=this.jobsAfterMode(),e=[...new Set(t.map(l=>y(l).trim()).filter(Boolean))].sort((l,s)=>l.localeCompare(s)),r=[...new Set(t.map(l=>b(l).trim()).filter(Boolean))].sort((l,s)=>l.localeCompare(s)),o=this.filterForm.querySelector(c.filterLocation),a=this.filterForm.querySelector(c.filterCategory);o&&this.rebuildFilterSelect(o,e),a&&this.rebuildFilterSelect(a,r)}rebuildFilterSelect(t,e){let r=t.value;t.innerHTML="";let o=document.createElement("option");o.value="",o.textContent="All",t.appendChild(o);for(let a of e){let l=document.createElement("option");l.value=a,l.textContent=a,t.appendChild(l)}t.value=e.includes(r)?r:"",this.syncCustomSelect(t)}syncCustomSelect(t){let e=t.closest(".w-dropdown");if(!e)return;let r=e.querySelector(".w-dropdown-list"),o=r?.querySelector(".custom-select_dropdown_scroll")??r;if(!o)return;let a=e.querySelector(".custom-select_dropdown_label"),l=o.querySelectorAll("a"),s=l[0]?.cloneNode(!0)??(()=>{let n=document.createElement("a");return n.href="#",n.className="custom-select_dropdown_link text-size-xsmall",n})();l.forEach(n=>n.remove());let d=n=>{a&&(a.textContent=n||"All")};for(let n of Array.from(t.options)){let p=s.cloneNode(!0);p.href="#",p.textContent=n.textContent||n.value||"All",p.setAttribute("tabindex","0"),p.addEventListener("click",f=>{f.preventDefault(),t.value=n.value,d(n.textContent||"All"),t.dispatchEvent(new Event("change",{bubbles:!0})),e.classList.remove("w--open"),r?.classList.remove("w--open"),e.querySelector(".w-dropdown-toggle")?.setAttribute("aria-expanded","false")}),o.appendChild(p)}let u=t.options[t.selectedIndex];d(u?.textContent||"All")}applyUrlFilterValues(){if(!this.filterForm)return;let t=new URLSearchParams(window.location.search),e=t.get("careers_location_equal")??t.get("careers_location")??t.get("location"),r=t.get("careers_category_equal")??t.get("careers_category")??t.get("category"),o=t.get("careers_title_contains")??t.get("careers_title")??t.get("title"),a=(l,s)=>{if(!s)return;let d=this.filterForm?.querySelector(c[l]);if(!d)return;let u=Array.from(d.options).find(n=>n.value===s||n.textContent?.trim()===s);if(u)d.value=u.value;else{let n=document.createElement("option");n.value=s,n.textContent=s,d.appendChild(n),d.value=s}this.syncCustomSelect(d),d.dispatchEvent(new Event("change",{bubbles:!0}))};if(e&&a("filterLocation",e),r&&a("filterCategory",r),o){let l=this.filterForm.querySelector(c.filterTitle);l&&(l.value=o)}(e||r||o)&&(this.currentPage=1)}bindFilters(){if(!this.filterForm)return;this.filterForm.addEventListener("submit",e=>e.preventDefault()),this.filterForm.addEventListener("change",()=>{this.currentPage=1,this.renderFiltered()});let t=this.filterForm.querySelector(c.filterTitle);t&&t.addEventListener("input",W(()=>{this.currentPage=1,this.renderFiltered()},200))}bindPagination(){let t=this.root?.querySelector(c.paginationWrap);t&&t.addEventListener("click",e=>{e.preventDefault();let o=e.target.closest("a");if(!o)return;let a=o.closest(".pagination_link_wrap");if(a){if(a===t.firstElementChild)this.currentPage=Math.max(1,this.currentPage-1);else{let{location:u,category:n,title:p}=this.readFilterInputs(),f=this.jobsAfterMode(),g=T(f,u,n,p),h=Math.ceil(g.length/this.itemsPerPage);this.currentPage=Math.min(h,this.currentPage+1)}this.renderFiltered(),requestAnimationFrame(()=>{let u=document.getElementById("careers");if(u){let n=u.getBoundingClientRect();window.scrollTo({top:window.scrollY+n.top-10,behavior:"smooth"})}});return}let l=o.textContent?.trim();if(l==="..."||!l)return;let s=parseInt(l,10);isNaN(s)||(this.currentPage=s,this.renderFiltered(),requestAnimationFrame(()=>{let d=document.getElementById("careers");if(d){let u=d.getBoundingClientRect();window.scrollTo({top:window.scrollY+u.top-10,behavior:"smooth"})}}))})}bindReset(){let t=this.root?.querySelector('[data-careers-el="reset"]');t&&t.addEventListener("click",()=>{let e=this.filterForm?.querySelector(c.filterLocation);e&&(e.value="",this.syncCustomSelect(e),e.dispatchEvent(new Event("change",{bubbles:!0})));let r=this.filterForm?.querySelector(c.filterCategory);r&&(r.value="",this.syncCustomSelect(r),r.dispatchEvent(new Event("change",{bubbles:!0})));let o=this.filterForm?.querySelector(c.filterTitle);o&&(o.value="",o.dispatchEvent(new Event("input",{bubbles:!0}))),this.currentPage=1,this.renderFiltered()})}updatePagination(t){let e=this.root?.querySelector(c.paginationWrap);if(!e)return;let r=e.querySelector(".pagination_number_wrap");if(r)if(t>1){e.classList.remove("hide"),r.innerHTML="";for(let l=1;l<=t;l++){let s=document.createElement("a");s.href="#",s.className="pagination_number_link",s.textContent=l.toString(),l===this.currentPage&&s.classList.add("active"),r.appendChild(s)}let o=e.firstElementChild,a=e.lastElementChild;o&&(this.currentPage===1?o.classList.add("is-list-pagination-disabled"):o.classList.remove("is-list-pagination-disabled")),a&&(this.currentPage===t?a.classList.add("is-list-pagination-disabled"):a.classList.remove("is-list-pagination-disabled"))}else{e.classList.add("hide");let o=e.firstElementChild,a=e.lastElementChild;o&&o.classList.remove("is-list-pagination-disabled"),a&&a.classList.remove("is-list-pagination-disabled")}}renderFiltered(){if(!this.jobList||!this.itemTemplate)return;let{location:t,category:e,title:r}=this.readFilterInputs(),o=this.jobsAfterMode(),a=T(o,t,e,r),l=a.length,s=Math.ceil(l/this.itemsPerPage);this.currentPage=Math.min(this.currentPage,s||1);let d=(this.currentPage-1)*this.itemsPerPage,u=d+this.itemsPerPage,n=a.slice(d,u);this.jobList.innerHTML="";for(let f of n){let g=this.itemTemplate.cloneNode(!0);O(g,f),this.jobList.appendChild(g)}let p=this.root?.querySelector(c.empty);p&&(n.length===0?p.classList.remove("hide"):p.classList.add("hide")),this.updatePagination(s),window.dispatchEvent(new CustomEvent("jobboard:filtered",{detail:{total:this.jobs.length,pool:o.length,visible:l,page:this.currentPage,totalPages:s,location:t,category:e,title:r,mode:this.listMode,city:this.cityParsed}}))}jobsAfterMode(){return this.listMode==="all"?this.jobs:this.listMode==="cities"&&this.cityParsed?this.jobs.filter(t=>{let e=y(t).toLowerCase(),r=e.includes(this.cityParsed.citySlug.toLowerCase()),o=e.includes(this.cityParsed.stateCode);return r&&o}):this.listMode==="interns"?this.jobs.filter(t=>(t.jobType?.descriptor?.toLowerCase()??"").includes("intern")||t.title.toLowerCase().includes("intern")):this.jobs}async loadJobs(){try{let t=await fetch(R);if(!t.ok)throw new Error(`HTTP error! status: ${t.status}`);let e=await t.json(),r=Array.isArray(e)?e:Array.isArray(e?.data)?e.data:Array.isArray(e?.jobPostings)?e.jobPostings:[];this.jobs=r}catch(t){console.error("[JobBoard] Failed to fetch jobs:",t),this.jobs=[]}}updateLocationCategories(){let t=document.querySelectorAll(".locations-map_list_item"),e={};for(let r of t){let o=r.querySelector("[data-city]");if(!o){console.error("[JobBoard] Missing [data-city] in .locations-map_list_item");continue}let a=o.getAttribute("data-city")?.trim();if(!a){console.error("[JobBoard] Empty location name in .locations-map_list_item");continue}let l=this.jobs.filter(u=>C(u,a)),s=new Set;for(let u of l){let n=b(u);n&&n!=="General"&&s.add(n)}e[a]=Array.from(s).sort();let d=r.querySelector("[data-city]");if(!d){console.error("[JobBoard] Missing category container in .locations-map_list_item");continue}d.innerHTML="";for(let u of Array.from(s).sort()){let n=document.createElement("div");n.setAttribute("data-category",u),n.setAttribute("fs-list-field","job-category"),n.textContent=u,d.appendChild(n)}}window.dispatchEvent(new CustomEvent("locationCategoriesUpdated",{detail:e}))}async refresh(){!this.jobList||!this.itemTemplate||(this.currentPage=1,await this.loadJobs(),this.populateFilterOptions(),window.location.pathname==="/about/locations"&&this.updateLocationCategories(),this.renderFiltered(),window.dispatchEvent(new CustomEvent("jobboard:rendered",{detail:{count:this.jobs.length,mode:this.listMode,city:this.cityParsed}})))}};window.refreshJobBoard=null;window.Webflow||(window.Webflow=[]);window.Webflow.push(async()=>{if(document.querySelector(".careers-list_list_wrap")){let t=new v;await t.init(),window.refreshJobBoard=()=>t.refresh()}});})();
+"use strict";
+(() => {
+  // bin/live-reload.js
+  new EventSource(`${"http://localhost:3000"}/esbuild`).addEventListener("change", () => location.reload());
+
+  // src/utils/job-board.ts
+  function getTitle(job) {
+    const v = job.title ?? job.jobPostingTitle ?? job.descriptor;
+    return String(v ?? "");
+  }
+  function getLocationLabel(job) {
+    const primary = job.primaryLocation;
+    const loc = job;
+    const v = primary?.descriptor ?? loc.locationsText ?? loc.locations_text ?? loc.location?.label;
+    return String(v ?? "");
+  }
+  function getCategory(job) {
+    const cats = job.categories;
+    const loc = job;
+    const v = (Array.isArray(cats) && cats[0]?.descriptor) ?? loc.department ?? loc.jobFamilyReference?.descriptor ?? loc.supervisoryOrganizationReference?.descriptor;
+    return String(v ?? "General");
+  }
+  function getPostingUrl(job) {
+    const loc = job;
+    const v = job.url ?? loc.externalApplyUrl ?? loc.externalApplyURL ?? loc.postingUrl ?? loc.applyUrl;
+    if (typeof v === "string" && v.startsWith("http")) return v;
+    const path = loc.externalPath ?? loc.externalJobPath;
+    if (typeof path === "string" && path) {
+      return path.startsWith("/") ? path : `/${path}`;
+    }
+    return "#";
+  }
+  function getTimeType(job) {
+    return job.timeType?.descriptor ?? "";
+  }
+  function getStartDate(job) {
+    const loc = job;
+    const v = job.startDate ?? loc.postedOn ?? loc.posted_on ?? loc.start_date;
+    return typeof v === "string" ? v : "";
+  }
+  function formatPostedOnLabel(startDate) {
+    const raw = startDate.trim();
+    if (!raw) return "\u2014";
+    const posted = new Date(raw);
+    if (Number.isNaN(posted.getTime())) return "\u2014";
+    const now = /* @__PURE__ */ new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfPosted = new Date(posted.getFullYear(), posted.getMonth(), posted.getDate());
+    const dayMs = 864e5;
+    const days = Math.floor((startOfToday.getTime() - startOfPosted.getTime()) / dayMs);
+    if (days <= 0) return "Posted Today";
+    if (days === 1) return "Posted Yesterday";
+    if (days >= 30) return "Posted 30+ Days Ago";
+    return `Posted ${days} Days Ago`;
+  }
+  function getPostedOnLabel(job) {
+    return formatPostedOnLabel(getStartDate(job));
+  }
+  function getSecondaryLine(job) {
+    const company = job.company?.descriptor?.trim();
+    if (company) return company;
+    return job.jobType?.descriptor ?? "";
+  }
+  function matchesLocation(job, filter) {
+    const f = filter.trim().toLowerCase();
+    if (!f) return true;
+    const loc = getLocationLabel(job).toLowerCase();
+    if (loc === f) return true;
+    if (loc.startsWith(f + ",")) return true;
+    if (f.includes(",") && loc === f) return true;
+    return loc.includes(f);
+  }
+  function matchesCategory(job, filter) {
+    const f = filter.trim().toLowerCase();
+    if (!f) return true;
+    return getCategory(job).toLowerCase() === f;
+  }
+  function matchesTitleSearch(job, query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return getTitle(job).toLowerCase().includes(q);
+  }
+  function filterJobs(jobs, location2, category, title) {
+    return jobs.filter(
+      (job) => matchesLocation(job, location2) && matchesCategory(job, category) && matchesTitleSearch(job, title)
+    );
+  }
+  function parseCityAttribute(value) {
+    const v = value.trim().toLowerCase();
+    if (!v) return null;
+    const last = v.lastIndexOf("-");
+    if (last <= 0) return null;
+    const maybeState = v.slice(last + 1);
+    if (maybeState.length !== 2 || !/^[a-z]{2}$/.test(maybeState)) return null;
+    return { citySlug: v.slice(0, last), stateCode: maybeState };
+  }
+  function normalizeListMode(raw) {
+    const m = (raw ?? "all").trim().toLowerCase();
+    if (m === "cities" || m === "interns") return m;
+    return "all";
+  }
+  var devMode = localStorage.getItem("api-mode") === "local";
+  var API_ENDPOINT = devMode ? "http://localhost:8000/api/jobs" : "https://poet-server.vercel.app/api/jobs";
+  var SELECTORS = {
+    root: ".careers-list_list_wrap",
+    filtersForm: "form.careers-list_filters_form",
+    filterLocation: 'select[fs-list-field="location"]',
+    filterCategory: 'select[fs-list-field="category"]',
+    filterTitle: 'input[fs-list-field="title"]',
+    list: ".careers-list_list",
+    item: ".careers-list_item",
+    cardTitle: '[fs-list-field="title"], .career-card_heading_text',
+    location: '[fs-list-field="location"]',
+    category: '[fs-list-field="category"], [fs-list-field="job-category"]',
+    secondaryText: ".career-card_text",
+    detailLabels: ".career-card_detail_wrap .career-card_detail_label",
+    postedOn: '[data-careers-el="posted-on"], [fs-list-field="posted-on"]',
+    applyAnchor: ".career-card_details_button a",
+    clickableBtn: ".clickable_btn",
+    clickableSrText: ".clickable_text",
+    paginationWrap: ".pagination_wrap",
+    empty: '[data-careers-el="empty"]'
+  };
+  function populateCareerItem(item, job) {
+    const title = getTitle(job);
+    const location2 = getLocationLabel(job);
+    const category = getCategory(job);
+    const url = getPostingUrl(job);
+    const timeType = getTimeType(job);
+    const postedOn = getPostedOnLabel(job);
+    const secondary = getSecondaryLine(job);
+    const titleEl = item.querySelector(SELECTORS.cardTitle);
+    if (titleEl) titleEl.textContent = title;
+    const sub = item.querySelector(SELECTORS.secondaryText);
+    if (sub) sub.textContent = secondary;
+    const locEl = item.querySelector(SELECTORS.location);
+    if (locEl) locEl.textContent = location2;
+    const labels = item.querySelectorAll(SELECTORS.detailLabels);
+    if (labels.length >= 2) {
+      labels[1].textContent = timeType || "\u2014";
+    }
+    const postedEl = item.querySelector(SELECTORS.postedOn);
+    if (postedEl) {
+      postedEl.textContent = postedOn;
+    } else if (labels.length >= 3) {
+      labels[2].textContent = postedOn;
+    }
+    item.querySelectorAll(SELECTORS.category).forEach((el) => {
+      el.textContent = category;
+    });
+    const applyLink = item.querySelector(SELECTORS.applyAnchor);
+    if (applyLink) {
+      applyLink.href = url;
+      applyLink.target = "_blank";
+      applyLink.rel = "noopener noreferrer";
+    }
+    const sr = item.querySelector(SELECTORS.clickableSrText);
+    if (sr) sr.textContent = title;
+    const btn = item.querySelector(SELECTORS.clickableBtn);
+    if (btn && url.startsWith("http")) {
+      const open = (e) => {
+        e.preventDefault();
+        window.open(url, "_blank", "noopener,noreferrer");
+      };
+      btn.addEventListener("click", open);
+    }
+  }
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+  var JobBoardController = class {
+    jobs = [];
+    itemTemplate = null;
+    root = null;
+    jobList = null;
+    filterForm = null;
+    listMode = "all";
+    cityParsed = null;
+    currentPage = 1;
+    itemsPerPage = 10;
+    async init() {
+      this.root = document.querySelector(SELECTORS.root);
+      if (!this.root) {
+        console.error("[JobBoard] Missing .careers-list_list_wrap");
+        return;
+      }
+      this.jobList = this.root.querySelector(SELECTORS.list);
+      if (!this.jobList) {
+        console.error("[JobBoard] Missing .careers-list_list");
+        return;
+      }
+      const templateItem = this.jobList.querySelector(SELECTORS.item);
+      if (!templateItem || !(templateItem instanceof HTMLElement)) {
+        console.error("[JobBoard] Missing template .careers-list_item");
+        return;
+      }
+      this.itemTemplate = templateItem.cloneNode(true);
+      this.filterForm = this.root.querySelector(SELECTORS.filtersForm);
+      this.listMode = normalizeListMode(this.jobList.getAttribute("mode"));
+      const cityAttr = this.jobList.getAttribute("city") ?? "";
+      this.cityParsed = this.listMode === "cities" ? parseCityAttribute(cityAttr) : null;
+      if (this.listMode === "cities" && !this.cityParsed) {
+        console.error(
+          '[JobBoard] mode="cities" requires city="{city-slug}-{st}" (e.g. alexandria-in); got:',
+          cityAttr || "(empty)"
+        );
+      }
+      this.disableFinsweetSelectCustom();
+      await this.loadJobs();
+      this.populateFilterOptions();
+      if (window.location.pathname === "/about/locations") {
+        this.updateLocationCategories();
+      }
+      this.bindFilters();
+      this.applyUrlFilterValues();
+      this.bindPagination();
+      this.bindReset();
+      this.renderFiltered();
+      window.dispatchEvent(
+        new CustomEvent("jobboard:rendered", {
+          detail: {
+            count: this.jobs.length,
+            mode: this.listMode,
+            city: this.cityParsed
+          }
+        })
+      );
+    }
+    readFilterInputs() {
+      const loc = this.filterForm?.querySelector(SELECTORS.filterLocation)?.value ?? "";
+      const cat = this.filterForm?.querySelector(SELECTORS.filterCategory)?.value ?? "";
+      const title = this.filterForm?.querySelector(SELECTORS.filterTitle)?.value ?? "";
+      return { location: loc, category: cat, title };
+    }
+    /** CMS nests <option>s in <div>s inside <select>; browsers ignore those for select.options. */
+    disableFinsweetSelectCustom() {
+      if (!this.filterForm) return;
+      this.filterForm.querySelectorAll('[fs-selectcustom-element="dropdown"]').forEach((el) => {
+        el.removeAttribute("fs-selectcustom-element");
+        el.removeAttribute("fs-selectcustom-hideinitial");
+      });
+    }
+    populateFilterOptions() {
+      if (!this.filterForm) return;
+      const pool = this.jobsAfterMode();
+      const locations = [
+        ...new Set(pool.map((job) => getLocationLabel(job).trim()).filter(Boolean))
+      ].sort((a, b) => a.localeCompare(b));
+      const categories = [
+        ...new Set(pool.map((job) => getCategory(job).trim()).filter(Boolean))
+      ].sort((a, b) => a.localeCompare(b));
+      const locationSelect = this.filterForm.querySelector(
+        SELECTORS.filterLocation
+      );
+      const categorySelect = this.filterForm.querySelector(
+        SELECTORS.filterCategory
+      );
+      if (locationSelect) this.rebuildFilterSelect(locationSelect, locations);
+      if (categorySelect) this.rebuildFilterSelect(categorySelect, categories);
+    }
+    rebuildFilterSelect(select, values) {
+      const previous = select.value;
+      select.innerHTML = "";
+      const allOption = document.createElement("option");
+      allOption.value = "";
+      allOption.textContent = "All";
+      select.appendChild(allOption);
+      for (const value of values) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      }
+      select.value = values.includes(previous) ? previous : "";
+      this.syncCustomSelect(select);
+    }
+    syncCustomSelect(select) {
+      const dropdown = select.closest(".w-dropdown");
+      if (!dropdown) return;
+      const list = dropdown.querySelector(".w-dropdown-list");
+      const scroll = list?.querySelector(".custom-select_dropdown_scroll") ?? list;
+      if (!scroll) return;
+      const labelEl = dropdown.querySelector(".custom-select_dropdown_label");
+      const existingLinks = scroll.querySelectorAll("a");
+      const template = existingLinks[0]?.cloneNode(true) ?? (() => {
+        const link = document.createElement("a");
+        link.href = "#";
+        link.className = "custom-select_dropdown_link text-size-xsmall";
+        return link;
+      })();
+      existingLinks.forEach((link) => link.remove());
+      const setLabel = (text) => {
+        if (labelEl) labelEl.textContent = text || "All";
+      };
+      for (const option of Array.from(select.options)) {
+        const link = template.cloneNode(true);
+        link.href = "#";
+        link.textContent = option.textContent || option.value || "All";
+        link.setAttribute("tabindex", "0");
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          select.value = option.value;
+          setLabel(option.textContent || "All");
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          dropdown.classList.remove("w--open");
+          list?.classList.remove("w--open");
+          const toggle = dropdown.querySelector(".w-dropdown-toggle");
+          toggle?.setAttribute("aria-expanded", "false");
+        });
+        scroll.appendChild(link);
+      }
+      const selected = select.options[select.selectedIndex];
+      setLabel(selected?.textContent || "All");
+    }
+    applyUrlFilterValues() {
+      if (!this.filterForm) return;
+      const params = new URLSearchParams(window.location.search);
+      const locationValue = params.get("careers_location_equal") ?? params.get("careers_location") ?? params.get("location");
+      const categoryValue = params.get("careers_category_equal") ?? params.get("careers_category") ?? params.get("category");
+      const titleValue = params.get("careers_title_contains") ?? params.get("careers_title") ?? params.get("title");
+      const setSelectValue = (field, value) => {
+        if (!value) return;
+        const select = this.filterForm?.querySelector(SELECTORS[field]);
+        if (!select) return;
+        const candidate = Array.from(select.options).find(
+          (opt) => opt.value === value || opt.textContent?.trim() === value
+        );
+        if (candidate) {
+          select.value = candidate.value;
+        } else {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          select.appendChild(option);
+          select.value = value;
+        }
+        this.syncCustomSelect(select);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      if (locationValue) setSelectValue("filterLocation", locationValue);
+      if (categoryValue) setSelectValue("filterCategory", categoryValue);
+      if (titleValue) {
+        const titleInput = this.filterForm.querySelector(SELECTORS.filterTitle);
+        if (titleInput) titleInput.value = titleValue;
+      }
+      if (locationValue || categoryValue || titleValue) {
+        this.currentPage = 1;
+      }
+    }
+    bindFilters() {
+      if (!this.filterForm) return;
+      this.filterForm.addEventListener("submit", (e) => e.preventDefault());
+      this.filterForm.addEventListener("change", () => {
+        this.currentPage = 1;
+        this.renderFiltered();
+      });
+      const titleInput = this.filterForm.querySelector(SELECTORS.filterTitle);
+      if (titleInput) {
+        titleInput.addEventListener(
+          "input",
+          debounce(() => {
+            this.currentPage = 1;
+            this.renderFiltered();
+          }, 200)
+        );
+      }
+    }
+    bindPagination() {
+      const paginationWrap = this.root?.querySelector(SELECTORS.paginationWrap);
+      if (!paginationWrap) return;
+      paginationWrap.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = e.target;
+        const link = target.closest("a");
+        if (!link) return;
+        const linkWrap = link.closest(".pagination_link_wrap");
+        if (linkWrap) {
+          const isPrev = linkWrap === paginationWrap.firstElementChild;
+          if (isPrev) {
+            this.currentPage = Math.max(1, this.currentPage - 1);
+          } else {
+            const { location: location2, category, title } = this.readFilterInputs();
+            const pool = this.jobsAfterMode();
+            const allVisible = filterJobs(pool, location2, category, title);
+            const totalPages = Math.ceil(allVisible.length / this.itemsPerPage);
+            this.currentPage = Math.min(totalPages, this.currentPage + 1);
+          }
+          this.renderFiltered();
+          requestAnimationFrame(() => {
+            const section = document.getElementById("careers");
+            if (section) {
+              const rect = section.getBoundingClientRect();
+              const offset = 10;
+              window.scrollTo({
+                top: window.scrollY + rect.top - offset,
+                behavior: "smooth"
+              });
+            }
+          });
+          return;
+        }
+        const pageText = link.textContent?.trim();
+        if (pageText === "..." || !pageText) return;
+        const page = parseInt(pageText, 10);
+        if (isNaN(page)) return;
+        this.currentPage = page;
+        this.renderFiltered();
+        requestAnimationFrame(() => {
+          const section = document.getElementById("careers");
+          if (section) {
+            const rect = section.getBoundingClientRect();
+            const offset = 10;
+            window.scrollTo({
+              top: window.scrollY + rect.top - offset,
+              behavior: "smooth"
+            });
+          }
+        });
+      });
+    }
+    bindReset() {
+      const resetBtn = this.root?.querySelector(
+        '[data-careers-el="reset"]'
+      );
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          const locationSelect = this.filterForm?.querySelector(
+            SELECTORS.filterLocation
+          );
+          if (locationSelect) {
+            locationSelect.value = "";
+            this.syncCustomSelect(locationSelect);
+            locationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const categorySelect = this.filterForm?.querySelector(
+            SELECTORS.filterCategory
+          );
+          if (categorySelect) {
+            categorySelect.value = "";
+            this.syncCustomSelect(categorySelect);
+            categorySelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const titleInput = this.filterForm?.querySelector(SELECTORS.filterTitle);
+          if (titleInput) {
+            titleInput.value = "";
+            titleInput.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          this.currentPage = 1;
+          this.renderFiltered();
+        });
+      }
+    }
+    updatePagination(totalPages) {
+      const paginationWrap = this.root?.querySelector(SELECTORS.paginationWrap);
+      if (!paginationWrap) return;
+      const numberWrap = paginationWrap.querySelector(
+        ".pagination_number_wrap"
+      );
+      if (!numberWrap) return;
+      if (totalPages > 1) {
+        paginationWrap.classList.remove("hide");
+        numberWrap.innerHTML = "";
+        for (let i = 1; i <= totalPages; i++) {
+          const link = document.createElement("a");
+          link.href = "#";
+          link.className = "pagination_number_link";
+          link.textContent = i.toString();
+          if (i === this.currentPage) {
+            link.classList.add("active");
+          }
+          numberWrap.appendChild(link);
+        }
+        const prevEl = paginationWrap.firstElementChild;
+        const nextEl = paginationWrap.lastElementChild;
+        if (prevEl) {
+          if (this.currentPage === 1) {
+            prevEl.classList.add("is-list-pagination-disabled");
+          } else {
+            prevEl.classList.remove("is-list-pagination-disabled");
+          }
+        }
+        if (nextEl) {
+          if (this.currentPage === totalPages) {
+            nextEl.classList.add("is-list-pagination-disabled");
+          } else {
+            nextEl.classList.remove("is-list-pagination-disabled");
+          }
+        }
+      } else {
+        paginationWrap.classList.add("hide");
+        const prevEl = paginationWrap.firstElementChild;
+        const nextEl = paginationWrap.lastElementChild;
+        if (prevEl) prevEl.classList.remove("is-list-pagination-disabled");
+        if (nextEl) nextEl.classList.remove("is-list-pagination-disabled");
+      }
+    }
+    renderFiltered() {
+      if (!this.jobList || !this.itemTemplate) return;
+      const { location: location2, category, title } = this.readFilterInputs();
+      const pool = this.jobsAfterMode();
+      const allVisible = filterJobs(pool, location2, category, title);
+      const totalItems = allVisible.length;
+      const totalPages = Math.ceil(totalItems / this.itemsPerPage);
+      this.currentPage = Math.min(this.currentPage, totalPages || 1);
+      const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+      const endIndex = startIndex + this.itemsPerPage;
+      const visible = allVisible.slice(startIndex, endIndex);
+      this.jobList.innerHTML = "";
+      for (const job of visible) {
+        const item = this.itemTemplate.cloneNode(true);
+        populateCareerItem(item, job);
+        this.jobList.appendChild(item);
+      }
+      const emptyEl = this.root?.querySelector(SELECTORS.empty);
+      if (emptyEl) {
+        if (visible.length === 0) {
+          emptyEl.classList.remove("hide");
+        } else {
+          emptyEl.classList.add("hide");
+        }
+      }
+      this.updatePagination(totalPages);
+      window.dispatchEvent(
+        new CustomEvent("jobboard:filtered", {
+          detail: {
+            total: this.jobs.length,
+            pool: pool.length,
+            visible: totalItems,
+            page: this.currentPage,
+            totalPages,
+            location: location2,
+            category,
+            title,
+            mode: this.listMode,
+            city: this.cityParsed
+          }
+        })
+      );
+    }
+    jobsAfterMode() {
+      if (this.listMode === "all") return this.jobs;
+      if (this.listMode === "cities" && this.cityParsed) {
+        return this.jobs.filter((job) => {
+          const loc = getLocationLabel(job).toLowerCase();
+          const cityMatch = loc.includes(this.cityParsed.citySlug.toLowerCase());
+          const stateMatch = loc.includes(this.cityParsed.stateCode);
+          return cityMatch && stateMatch;
+        });
+      }
+      if (this.listMode === "interns") {
+        return this.jobs.filter((job) => {
+          const jobType = job.jobType?.descriptor?.toLowerCase() ?? "";
+          return jobType.includes("intern") || job.title.toLowerCase().includes("intern");
+        });
+      }
+      return this.jobs;
+    }
+    async loadJobs() {
+      try {
+        const response = await fetch(API_ENDPOINT);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const raw = await response.json();
+        const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.jobPostings) ? raw.jobPostings : [];
+        this.jobs = arr;
+      } catch (error) {
+        console.error("[JobBoard] Failed to fetch jobs:", error);
+        this.jobs = [];
+      }
+    }
+    updateLocationCategories() {
+      const locationItems = document.querySelectorAll(".locations-map_list_item");
+      const locationData = {};
+      for (const item of locationItems) {
+        const titleEl = item.querySelector("[data-city]");
+        if (!titleEl) {
+          console.error(`[JobBoard] Missing [data-city] in .locations-map_list_item`);
+          continue;
+        }
+        const locationName = titleEl.getAttribute("data-city")?.trim();
+        if (!locationName) {
+          console.error(`[JobBoard] Empty location name in .locations-map_list_item`);
+          continue;
+        }
+        const matchingJobs = this.jobs.filter((job) => matchesLocation(job, locationName));
+        const categories = /* @__PURE__ */ new Set();
+        for (const job of matchingJobs) {
+          const cat = getCategory(job);
+          if (cat && cat !== "General") categories.add(cat);
+        }
+        locationData[locationName] = Array.from(categories).sort();
+        const categoryContainer = item.querySelector("[data-city]");
+        if (!categoryContainer) {
+          console.error(`[JobBoard] Missing category container in .locations-map_list_item`);
+          continue;
+        }
+        categoryContainer.innerHTML = "";
+        for (const cat of Array.from(categories).sort()) {
+          const categoryElement = document.createElement("div");
+          categoryElement.setAttribute("data-category", cat);
+          categoryElement.setAttribute("fs-list-field", "job-category");
+          categoryElement.textContent = cat;
+          categoryContainer.appendChild(categoryElement);
+        }
+      }
+      window.dispatchEvent(
+        new CustomEvent("locationCategoriesUpdated", {
+          detail: locationData
+        })
+      );
+    }
+    async refresh() {
+      if (!this.jobList || !this.itemTemplate) return;
+      this.currentPage = 1;
+      await this.loadJobs();
+      this.populateFilterOptions();
+      if (window.location.pathname === "/about/locations") {
+        this.updateLocationCategories();
+      }
+      this.renderFiltered();
+      window.dispatchEvent(
+        new CustomEvent("jobboard:rendered", {
+          detail: {
+            count: this.jobs.length,
+            mode: this.listMode,
+            city: this.cityParsed
+          }
+        })
+      );
+    }
+  };
+  window.refreshJobBoard = null;
+
+  // src/index.ts
+  window.Webflow ||= [];
+  window.Webflow.push(async () => {
+    const root = document.querySelector(".careers-list_list_wrap");
+    if (root) {
+      const jobBoard = new JobBoardController();
+      await jobBoard.init();
+      window.refreshJobBoard = () => jobBoard.refresh();
+    }
+  });
+})();
+//# sourceMappingURL=index.js.map
