@@ -103,16 +103,16 @@ Copy `.env.example` to `.env` and fill in your Workday credentials:
 cp .env.example .env
 ```
 
-| Variable                    | Description                                                                 | Required |
-| --------------------------- | --------------------------------------------------------------------------- | -------- |
-| `WORKDAY_PROFILE`           | Optional: `preview` / `dev` / `development` vs `live` / `prod` / `production`. If unset, only `WORKDAY_*` below is used. | —        |
-| `WORKDAY_BASE_URL`          | API base URL; also fallback when profile-specific URL is omitted            | ✅\*     |
-| `WORKDAY_TENANT`            | Tenant name; also fallback for profile-specific tenant                      | ✅\*     |
-| `WORKDAY_CLIENT_ID`         | OAuth client ID; fallback for profile-specific IDs                          | ✅\*     |
-| `WORKDAY_CLIENT_SECRET`     | OAuth client secret                                                         | ✅\*     |
-| `WORKDAY_REFRESH_TOKEN`     | OAuth refresh token                                                         | ✅\*     |
-| `WORKDAY_PREVIEW_*`         | `BASE_URL`, `TENANT`, `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN` when `WORKDAY_PROFILE=preview` | —        |
-| `WORKDAY_LIVE_*`            | Same pattern when `WORKDAY_PROFILE=live` (e.g. `services1.myworkday.com/ccx`, tenant `poet`) | —        |
+| Variable                | Description                                                                                                              | Required |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `WORKDAY_PROFILE`       | Optional: `preview` / `dev` / `development` vs `live` / `prod` / `production`. If unset, only `WORKDAY_*` below is used. | —        |
+| `WORKDAY_BASE_URL`      | API base URL; also fallback when profile-specific URL is omitted                                                         | ✅\*     |
+| `WORKDAY_TENANT`        | Tenant name; also fallback for profile-specific tenant                                                                   | ✅\*     |
+| `WORKDAY_CLIENT_ID`     | OAuth client ID; fallback for profile-specific IDs                                                                       | ✅\*     |
+| `WORKDAY_CLIENT_SECRET` | OAuth client secret                                                                                                      | ✅\*     |
+| `WORKDAY_REFRESH_TOKEN` | OAuth refresh token                                                                                                      | ✅\*     |
+| `WORKDAY_PREVIEW_*`     | `BASE_URL`, `TENANT`, `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN` when `WORKDAY_PROFILE=preview`                       | —        |
+| `WORKDAY_LIVE_*`        | Same pattern when `WORKDAY_PROFILE=live` (e.g. `services1.myworkday.com/ccx`, tenant `poet`)                             | —        |
 
 \*Required as a complete set after resolution (shared `WORKDAY_*` and/or profile overrides).
 

@@ -74,7 +74,11 @@ function loadSelectCustom(onReady?: () => void): void {
 }
 
 function init(): void {
-  const sections = document.querySelectorAll('.careers-list_section');
+  // Prefer the section wrapper; fall back to the list wrap / custom selects so
+  // Select Custom still loads when Webflow omits `.careers-list_section`.
+  const sections = document.querySelectorAll(
+    '.careers-list_section, .careers-list_list_wrap, [fs-selectcustom-element="dropdown"]'
+  );
   if (!sections.length) return;
 
   loadAttributes(() => {

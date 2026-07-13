@@ -18,28 +18,19 @@ function workdayRefreshStorageKey(tenant: string): string {
 }
 
 function getUpstashRedis(): Redis | null {
-  const url =
-    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-  const token =
-    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   return new Redis({ url, token });
 }
 
-async function readStoredRefreshToken(
-  redis: Redis,
-  tenant: string
-): Promise<string | null> {
+async function readStoredRefreshToken(redis: Redis, tenant: string): Promise<string | null> {
   const raw = await redis.get<string>(workdayRefreshStorageKey(tenant));
   if (typeof raw !== 'string' || raw.length === 0) return null;
   return raw;
 }
 
-async function writeStoredRefreshToken(
-  redis: Redis,
-  tenant: string,
-  token: string
-): Promise<void> {
+async function writeStoredRefreshToken(redis: Redis, tenant: string, token: string): Promise<void> {
   await redis.set(workdayRefreshStorageKey(tenant), token);
 }
 
@@ -55,8 +46,7 @@ export async function getWorkdayAccessToken(): Promise<string> {
   const clientSecret = process.env.WORKDAY_CLIENT_SECRET;
 
   const redis = getUpstashRedis();
-  const fromKv =
-    redis && tenant ? await readStoredRefreshToken(redis, tenant) : null;
+  const fromKv = redis && tenant ? await readStoredRefreshToken(redis, tenant) : null;
   const refreshToken = fromKv ?? process.env.WORKDAY_REFRESH_TOKEN;
 
   if (!baseUrl || !tenant || !clientId || !clientSecret || !refreshToken) {

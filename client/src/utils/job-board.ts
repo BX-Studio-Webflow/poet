@@ -285,7 +285,11 @@ export class JobBoardController {
       );
     }
 
+    // Take over custom selects before Finsweet Select Custom can init on broken CMS markup.
+    this.disableFinsweetSelectCustom();
+
     await this.loadJobs();
+    this.populateFilterOptions();
 
     if (window.location.pathname === '/about/locations') {
       this.updateLocationCategories();
@@ -316,6 +320,106 @@ export class JobBoardController {
     const title =
       this.filterForm?.querySelector<HTMLInputElement>(SELECTORS.filterTitle)?.value ?? '';
     return { location: loc, category: cat, title };
+  }
+
+  /** CMS nests <option>s in <div>s inside <select>; browsers ignore those for select.options. */
+  private disableFinsweetSelectCustom(): void {
+    if (!this.filterForm) return;
+    this.filterForm
+      .querySelectorAll<HTMLElement>('[fs-selectcustom-element="dropdown"]')
+      .forEach((el) => {
+        el.removeAttribute('fs-selectcustom-element');
+        el.removeAttribute('fs-selectcustom-hideinitial');
+      });
+  }
+
+  private populateFilterOptions(): void {
+    if (!this.filterForm) return;
+
+    const pool = this.jobsAfterMode();
+    const locations = [
+      ...new Set(pool.map((job) => getLocationLabel(job).trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b));
+    const categories = [
+      ...new Set(pool.map((job) => getCategory(job).trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b));
+
+    const locationSelect = this.filterForm.querySelector<HTMLSelectElement>(
+      SELECTORS.filterLocation
+    );
+    const categorySelect = this.filterForm.querySelector<HTMLSelectElement>(
+      SELECTORS.filterCategory
+    );
+
+    if (locationSelect) this.rebuildFilterSelect(locationSelect, locations);
+    if (categorySelect) this.rebuildFilterSelect(categorySelect, categories);
+  }
+
+  private rebuildFilterSelect(select: HTMLSelectElement, values: string[]): void {
+    const previous = select.value;
+    select.innerHTML = '';
+
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'All';
+    select.appendChild(allOption);
+
+    for (const value of values) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    }
+
+    select.value = values.includes(previous) ? previous : '';
+    this.syncCustomSelect(select);
+  }
+
+  private syncCustomSelect(select: HTMLSelectElement): void {
+    const dropdown = select.closest('.w-dropdown');
+    if (!dropdown) return;
+
+    const list = dropdown.querySelector('.w-dropdown-list');
+    const scroll = list?.querySelector('.custom-select_dropdown_scroll') ?? list;
+    if (!scroll) return;
+
+    const labelEl = dropdown.querySelector('.custom-select_dropdown_label');
+    const existingLinks = scroll.querySelectorAll('a');
+    const template =
+      (existingLinks[0]?.cloneNode(true) as HTMLAnchorElement | undefined) ??
+      (() => {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'custom-select_dropdown_link text-size-xsmall';
+        return link;
+      })();
+
+    existingLinks.forEach((link) => link.remove());
+
+    const setLabel = (text: string) => {
+      if (labelEl) labelEl.textContent = text || 'All';
+    };
+
+    for (const option of Array.from(select.options)) {
+      const link = template.cloneNode(true) as HTMLAnchorElement;
+      link.href = '#';
+      link.textContent = option.textContent || option.value || 'All';
+      link.setAttribute('tabindex', '0');
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        select.value = option.value;
+        setLabel(option.textContent || 'All');
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        dropdown.classList.remove('w--open');
+        list?.classList.remove('w--open');
+        const toggle = dropdown.querySelector('.w-dropdown-toggle');
+        toggle?.setAttribute('aria-expanded', 'false');
+      });
+      scroll.appendChild(link);
+    }
+
+    const selected = select.options[select.selectedIndex];
+    setLabel(selected?.textContent || 'All');
   }
 
   private applyUrlFilterValues(): void {
@@ -352,6 +456,8 @@ export class JobBoardController {
         select.appendChild(option);
         select.value = value;
       }
+
+      this.syncCustomSelect(select);
 
       // Bubble a change event so other listeners (filters/pagination) respond.
       select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -462,6 +568,7 @@ export class JobBoardController {
         );
         if (locationSelect) {
           locationSelect.value = '';
+          this.syncCustomSelect(locationSelect);
           locationSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
         const categorySelect = this.filterForm?.querySelector<HTMLSelectElement>(
@@ -469,6 +576,7 @@ export class JobBoardController {
         );
         if (categorySelect) {
           categorySelect.value = '';
+          this.syncCustomSelect(categorySelect);
           categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
         const titleInput = this.filterForm?.querySelector<HTMLInputElement>(SELECTORS.filterTitle);
@@ -679,6 +787,7 @@ export class JobBoardController {
 
     this.currentPage = 1;
     await this.loadJobs();
+    this.populateFilterOptions();
     if (window.location.pathname === '/about/locations') {
       this.updateLocationCategories();
     }
