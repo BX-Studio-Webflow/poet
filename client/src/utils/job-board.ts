@@ -68,6 +68,36 @@ function getTimeType(job: Job): string {
   return job.timeType?.descriptor ?? '';
 }
 
+function getStartDate(job: Job): string {
+  const loc = job as Record<string, unknown>;
+  const v = job.startDate ?? loc.postedOn ?? loc.posted_on ?? loc.start_date;
+  return typeof v === 'string' ? v : '';
+}
+
+/** Relative posted date for list cards, e.g. "Posted Yesterday". */
+export function formatPostedOnLabel(startDate: string): string {
+  const raw = startDate.trim();
+  if (!raw) return '—';
+
+  const posted = new Date(raw);
+  if (Number.isNaN(posted.getTime())) return '—';
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfPosted = new Date(posted.getFullYear(), posted.getMonth(), posted.getDate());
+  const dayMs = 86_400_000;
+  const days = Math.floor((startOfToday.getTime() - startOfPosted.getTime()) / dayMs);
+
+  if (days <= 0) return 'Posted Today';
+  if (days === 1) return 'Posted Yesterday';
+  if (days >= 30) return 'Posted 30+ Days Ago';
+  return `Posted ${days} Days Ago`;
+}
+
+function getPostedOnLabel(job: Job): string {
+  return formatPostedOnLabel(getStartDate(job));
+}
+
 function getSecondaryLine(job: Job): string {
   const company = job.company?.descriptor?.trim();
   if (company) return company;
@@ -142,6 +172,7 @@ const SELECTORS = {
   category: '[fs-list-field="category"], [fs-list-field="job-category"]',
   secondaryText: '.career-card_text',
   detailLabels: '.career-card_detail_wrap .career-card_detail_label',
+  postedOn: '[data-careers-el="posted-on"], [fs-list-field="posted-on"]',
   applyAnchor: '.career-card_details_button a',
   clickableBtn: '.clickable_btn',
   clickableSrText: '.clickable_text',
@@ -155,6 +186,7 @@ function populateCareerItem(item: HTMLElement, job: Job): void {
   const category = getCategory(job);
   const url = getPostingUrl(job);
   const timeType = getTimeType(job);
+  const postedOn = getPostedOnLabel(job);
   const secondary = getSecondaryLine(job);
 
   const titleEl = item.querySelector(SELECTORS.cardTitle);
@@ -169,6 +201,13 @@ function populateCareerItem(item: HTMLElement, job: Job): void {
   const labels = item.querySelectorAll(SELECTORS.detailLabels);
   if (labels.length >= 2) {
     (labels[1] as HTMLElement).textContent = timeType || '—';
+  }
+
+  const postedEl = item.querySelector(SELECTORS.postedOn) as HTMLElement | null;
+  if (postedEl) {
+    postedEl.textContent = postedOn;
+  } else if (labels.length >= 3) {
+    (labels[2] as HTMLElement).textContent = postedOn;
   }
 
   item.querySelectorAll(SELECTORS.category).forEach((el) => {
